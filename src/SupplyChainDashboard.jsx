@@ -295,7 +295,8 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
                 </h3>
                 <div className="flex gap-1">
                     <button onClick={() => setSort('alpha')} className={`p-1.5 rounded transition-colors ${sortValue === 'alpha' ? (isDarkMode ? 'bg-slate-800 text-indigo-400' : 'bg-white shadow-sm text-indigo-600') : 'opacity-40 hover:opacity-100'}`} title="Sort Alpha"><ArrowUpDown className="w-3.5 h-3.5" /></button>
-                    <button onClick={() => setSort('invDesc')} className={`p-1.5 rounded transition-colors ${sortValue === 'invDesc' ? (isDarkMode ? 'bg-slate-800 text-indigo-400' : 'bg-white shadow-sm text-indigo-600') : 'opacity-40 hover:opacity-100'}`} title="Sort Inv"><Activity className="w-3.5 h-3.5" /></button>
+                    {/* MODIFIED: Sort Inv now uses 'invAsc' for lowest first */}
+                    <button onClick={() => setSort('invAsc')} className={`p-1.5 rounded transition-colors ${sortValue === 'invAsc' ? (isDarkMode ? 'bg-slate-800 text-indigo-400' : 'bg-white shadow-sm text-indigo-600') : 'opacity-40 hover:opacity-100'}`} title="Sort Inv (Low-High)"><Activity className="w-3.5 h-3.5" /></button>
                 </div>
             </div>
             <div className="relative mb-3">
@@ -515,7 +516,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
         const sorter = (a, b, method) => {
             if (method === 'alpha') return a.id.localeCompare(b.id);
-            if (method === 'invDesc') return b.currentInv - a.currentInv;
+            if (method === 'invAsc') return a.currentInv - b.currentInv; // LOWEST FIRST
             return 0;
         };
         rmNodes.sort((a, b) => sorter(a, b, sortRM));
@@ -836,7 +837,6 @@ export default function SupplyChainDashboard() {
         }
 
         const grouped = {};
-        // Logic update: If not 'All', only show selected metrics
         const chartFiltered = sourceData.filter(item => 
              filters.metric.includes('All') || filters.metric.includes(item.Metric)
         );
