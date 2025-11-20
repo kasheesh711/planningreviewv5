@@ -3,7 +3,7 @@ import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine, ComposedChart
 } from 'recharts';
 import {
-    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet
+    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box
 } from 'lucide-react';
 
 // --- Helper for CSV Parsing ---
@@ -11,7 +11,7 @@ const parseCSV = (csvText) => {
     const lines = csvText.split(/\r?\n/);
     if (lines.length < 2) return [];
 
-    const headers = lines[0].split(',').map(h => h.trim());
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
     const data = [];
 
     for (let i = 1; i < lines.length; i++) {
@@ -19,8 +19,8 @@ const parseCSV = (csvText) => {
         if (currentLine.length === headers.length) {
             const row = {};
             headers.forEach((header, index) => {
-                let value = currentLine[index].trim();
-                if (!isNaN(value) && value !== '' && (header === 'Value' || header.includes('Qty') || header.includes('Ratio'))) {
+                let value = currentLine[index].trim().replace(/^"|"$/g, '');
+                if (!isNaN(value) && value !== '' && (header === 'Value' || header.includes('Qty') || header.includes('Ratio') || header.includes('Quantity'))) {
                     value = parseFloat(value);
                 }
                 row[header] = value;
@@ -48,12 +48,11 @@ const addWeeks = (date, weeks) => {
     return result;
 };
 
-// --- Lead Time Helper ---
 const getLeadTimeWeeks = (invOrg) => {
     if (invOrg === 'IDCKDM') return 6;
     if (invOrg === 'VNHCDM' || invOrg === 'VNHNDM') return 7;
     if (invOrg === 'THBNDM' || invOrg === 'MYBGPM') return 5;
-    return 4; // Default
+    return 4;
 };
 
 // --- Sample Data ---
@@ -69,12 +68,10 @@ SF,RM,BAB250-MR1,MYBGPM,MR,KG,MTS,BAB250-MR1/MYBGPM/MR/KG/MTS,Tot.Inventory (For
 NR,RM,BAB250-MR1,THRYPM,MR,LM,NST(MTS),BAB250-MR1/THRYPM/MR/LM/NST(MTS),Indep. Req. (Forecast),0,12/17/2025,150
 NR,RM,BAB250-MR1,THRYPM,MR,LM,NST(MTS),BAB250-MR1/THRYPM/MR/LM/NST(MTS),Tot.Inventory (Forecast),0,12/17/2025,100`;
 
-// --- Sample BOM (Default State) ---
 const DEFAULT_BOM = [
-    { parent: 'AAG620-MR2', child: 'BAB250-MR1', ratio: 0.5 }, 
+    { parent: 'AAG620-MR2', child: 'BAB250-MR1', ratio: 0.5, plant: 'MYBGPM' }, 
 ];
 
-// --- Custom Tooltip Component ---
 const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
         return (
@@ -98,8 +95,6 @@ const CustomTooltip = ({ active, payload, label }) => {
     }
     return null;
 };
-
-// --- Components ---
 
 const SearchableSelect = ({ label, value, options, onChange, multi = false }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -218,6 +213,154 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false }) =>
     );
 };
 
+// --- NEW: Supply Chain Network Map Component ---
+const SupplyChainMap = ({ selectedItem, bomData, inventoryData, dateRange }) => {
+    // Logic to build the node data
+    const nodes = useMemo(() => {
+        if (!selectedItem) return null;
+
+        // 1. Central Node (The Selected FG)
+        // Calculate Min Inventory Status over date range
+        const fgRecords = inventoryData.filter(d => 
+            d['Item Code'] === selectedItem.itemCode && 
+            d['Inv Org'] === selectedItem.invOrg &&
+            d.Metric === 'Tot.Inventory (Forecast)' &&
+            (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
+            (!dateRange.end || d._dateObj <= new Date(dateRange.end))
+        );
+        const minFgInv = fgRecords.length > 0 ? Math.min(...fgRecords.map(d => d.Value)) : 0;
+        const fgStatus = minFgInv < 0 ? 'Critical' : (minFgInv < 1000 ? 'Low' : 'Good'); // Simplified logic
+
+        const centralNode = {
+            id: selectedItem.itemCode,
+            label: selectedItem.itemCode,
+            sub: selectedItem.invOrg,
+            type: 'FG',
+            status: fgStatus,
+            value: minFgInv
+        };
+
+        // 2. Left Nodes (Raw Materials from BOM)
+        const ingredients = bomData.filter(b => 
+            b.parent === selectedItem.itemCode && 
+            (!b.plant || b.plant === selectedItem.invOrg)
+        );
+        
+        const rmNodes = ingredients.map(ing => {
+            const rmRecords = inventoryData.filter(d => 
+                d['Item Code'] === ing.child && 
+                d['Inv Org'] === selectedItem.invOrg && // Assumption: RM is at same plant
+                d.Metric === 'Tot.Inventory (Forecast)' &&
+                (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
+                (!dateRange.end || d._dateObj <= new Date(dateRange.end))
+            );
+            const minRmInv = rmRecords.length > 0 ? Math.min(...rmRecords.map(d => d.Value)) : 0;
+            const rmStatus = minRmInv < 0 ? 'Critical' : 'Good';
+
+            return {
+                id: ing.child,
+                label: ing.child,
+                sub: `Ratio: ${ing.ratio}`,
+                type: 'RM',
+                status: rmStatus,
+                value: minRmInv
+            };
+        });
+
+        // 3. Right Nodes (DC Placeholders)
+        const dcNodes = [
+            { id: 'DC-01', label: 'North DC', sub: 'Pending Data', type: 'DC', status: 'Neutral' },
+            { id: 'DC-02', label: 'South DC', sub: 'Pending Data', type: 'DC', status: 'Neutral' }
+        ];
+
+        return { centralNode, rmNodes, dcNodes };
+
+    }, [selectedItem, bomData, inventoryData, dateRange]);
+
+    if (!nodes) return (
+        <div className="h-64 flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+            <Network className="w-10 h-10 mb-2 opacity-50" />
+            <p>Select an item in the Gantt below to visualize its supply network</p>
+        </div>
+    );
+
+    const NodeCard = ({ node, align = 'center' }) => {
+        const statusColors = {
+            'Critical': 'border-red-300 bg-red-50 text-red-700',
+            'Low': 'border-amber-300 bg-amber-50 text-amber-700',
+            'Good': 'border-emerald-300 bg-emerald-50 text-emerald-700',
+            'Neutral': 'border-slate-200 bg-slate-50 text-slate-500'
+        };
+        const dotColors = {
+            'Critical': 'bg-red-500', 'Low': 'bg-amber-500', 'Good': 'bg-emerald-500', 'Neutral': 'bg-slate-300'
+        };
+
+        return (
+            <div className={`relative flex items-center p-3 rounded-xl border shadow-sm transition-all w-56 ${statusColors[node.status] || statusColors['Neutral']}`}>
+                <div className={`w-2.5 h-2.5 rounded-full mr-3 ${dotColors[node.status] || dotColors['Neutral']}`}></div>
+                <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold uppercase tracking-wider opacity-80 flex items-center justify-between">
+                        {node.type}
+                        {node.type === 'FG' && <Factory className="w-3 h-3" />}
+                        {node.type === 'RM' && <Box className="w-3 h-3" />}
+                        {node.type === 'DC' && <Warehouse className="w-3 h-3" />}
+                    </div>
+                    <div className="font-bold text-sm truncate" title={node.label}>{node.label}</div>
+                    <div className="text-xs opacity-70 truncate">{node.sub}</div>
+                    {node.value !== undefined && (
+                        <div className="mt-1.5 h-1.5 w-full bg-black/5 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${dotColors[node.status]}`} style={{ width: '60%' }}></div>
+                        </div>
+                    )}
+                </div>
+                
+                {/* Connectors */}
+                {align === 'left' && <div className="absolute -right-4 top-1/2 -translate-y-1/2 w-4 h-0.5 bg-slate-300"></div>}
+                {align === 'right' && <div className="absolute -left-4 top-1/2 -translate-y-1/2 w-4 h-0.5 bg-slate-300"></div>}
+            </div>
+        );
+    };
+
+    return (
+        <div className="flex items-center justify-center h-64 overflow-x-auto p-4 bg-slate-50/30 rounded-xl border border-slate-100">
+            <div className="flex items-center gap-8 min-w-[600px]">
+                
+                {/* RM Column */}
+                <div className="flex flex-col gap-3 justify-center">
+                    {nodes.rmNodes.length > 0 ? nodes.rmNodes.map(n => (
+                        <NodeCard key={n.id} node={n} align="left" />
+                    )) : <div className="text-xs text-slate-400 italic p-4">No Linked RMs found in BOM</div>}
+                </div>
+
+                {/* Arrows */}
+                <div className="flex flex-col justify-center text-slate-300">
+                    <ArrowRight className="w-6 h-6" />
+                </div>
+
+                {/* Central FG Column */}
+                <div className="flex flex-col justify-center relative">
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase text-slate-400 tracking-widest">Plant View</div>
+                    <NodeCard node={nodes.centralNode} />
+                </div>
+
+                {/* Arrows */}
+                <div className="flex flex-col justify-center text-slate-300">
+                    <ArrowRight className="w-6 h-6" />
+                </div>
+
+                {/* DC Column */}
+                <div className="flex flex-col gap-3 justify-center border-l border-dashed border-slate-200 pl-8 relative">
+                     <div className="absolute -top-6 left-8 text-[10px] font-bold uppercase text-slate-400 tracking-widest">Distribution</div>
+                    {nodes.dcNodes.map(n => (
+                        <NodeCard key={n.id} node={n} align="right" />
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 export default function SupplyChainDashboard() {
     const [rawData, setRawData] = useState([]);
     const [bomData, setBomData] = useState(DEFAULT_BOM);
@@ -232,12 +375,8 @@ export default function SupplyChainDashboard() {
     });
     const [isLeadTimeMode, setIsLeadTimeMode] = useState(false);
     const [viewMode, setViewMode] = useState('risk'); // 'risk' | 'manufacturing'
-
-    // Interaction States
     const [selectedItem, setSelectedItem] = useState(null);
     const [hoveredDate, setHoveredDate] = useState(null);
-
-    // Risk/Gantt Filters
     const [riskFilters, setRiskFilters] = useState({
         critical: true,
         watchOut: true,
@@ -245,7 +384,6 @@ export default function SupplyChainDashboard() {
     });
     const [ganttSort, setGanttSort] = useState('itemCode');
 
-    // --- Loaders ---
     const handleDataLoad = (data) => {
         setRawData(data);
         const validTimes = [];
@@ -291,15 +429,15 @@ export default function SupplyChainDashboard() {
         reader.onload = (e) => {
             const text = e.target.result;
             const rawParsed = parseCSV(text);
-            
-            // Robust mapping for BOM columns
             const processedBom = rawParsed.map(row => ({
-                parent: row['Parent'] || row['Parent Item'] || row['parent'],
-                child: row['Child'] || row['Child Item'] || row['child'],
-                ratio: parseFloat(row['Ratio'] || row['Quantity Per'] || row['qty'] || 0)
+                plant: row['Plant'] || row['Plant '],
+                parent: row['Parent'] || row['Parent Item'] || row['Parent Item '],
+                child: row['Child'] || row['Child Item'] || row['Child Item '],
+                ratio: parseFloat(row['Ratio'] || row['Quantity Per'] || row['Quantity Per '] || row['qty'] || 0)
             })).filter(row => row.parent && row.child);
 
             setBomData(processedBom);
+            alert(`Successfully imported ${processedBom.length} BOM records.`);
         };
         reader.readAsText(file);
     };
@@ -352,7 +490,6 @@ export default function SupplyChainDashboard() {
         });
     }, [rawData, filters, dateRange]);
 
-    // --- 1. MAIN CHART DATA (Risk View) ---
     const riskChartData = useMemo(() => {
         let sourceData = filteredData;
         if (selectedItem) {
@@ -370,23 +507,20 @@ export default function SupplyChainDashboard() {
         );
 
         chartFiltered.forEach(item => {
-            if (!grouped[item.Date]) {
-                grouped[item.Date] = { date: item.Date, _dateObj: item._dateObj };
-            }
-            if (!grouped[item.Date][item.Metric]) {
-                grouped[item.Date][item.Metric] = 0;
-            }
+            if (!grouped[item.Date]) grouped[item.Date] = { date: item.Date, _dateObj: item._dateObj };
+            if (!grouped[item.Date][item.Metric]) grouped[item.Date][item.Metric] = 0;
             grouped[item.Date][item.Metric] += (item.Value || 0);
         });
         return Object.values(grouped).sort((a, b) => a._dateObj - b._dateObj);
     }, [filteredData, filters.metric, selectedItem, rawData, dateRange, viewMode]);
 
-    // --- 2. PRODUCTION DATA (Manufacturing View) ---
     const productionData = useMemo(() => {
         if (viewMode !== 'manufacturing' || !selectedItem) return [];
 
-        // Use bomData state instead of hardcoded constant
-        const ingredients = bomData.filter(b => b.parent === selectedItem.itemCode);
+        const ingredients = bomData.filter(b => 
+            b.parent === selectedItem.itemCode && 
+            (!b.plant || b.plant === selectedItem.invOrg)
+        );
         if (ingredients.length === 0) return [];
 
         const fgData = rawData.filter(d => 
@@ -422,24 +556,14 @@ export default function SupplyChainDashboard() {
         return Object.values(grouped).sort((a,b) => a._dateObj - b._dateObj);
     }, [viewMode, selectedItem, rawData, dateRange, bomData]);
 
-
-    // --- Gantt Data Logic ---
     const ganttData = useMemo(() => {
         const grouped = {};
         const today = new Date();
 
         filteredData.forEach(item => {
             const key = `${item['Item Code']}|${item['Inv Org']}`;
-            if (!grouped[key]) {
-                grouped[key] = {
-                    itemCode: item['Item Code'],
-                    invOrg: item['Inv Org'],
-                    days: {}
-                };
-            }
-            if (!grouped[key].days[item.Date]) {
-                grouped[key].days[item.Date] = { _dateObj: item._dateObj, metrics: {} };
-            }
+            if (!grouped[key]) grouped[key] = { itemCode: item['Item Code'], invOrg: item['Inv Org'], days: {} };
+            if (!grouped[key].days[item.Date]) grouped[key].days[item.Date] = { _dateObj: item._dateObj, metrics: {} };
             const normMetric = item.Metric.trim();
             grouped[key].days[item.Date].metrics[normMetric] = (grouped[key].days[item.Date].metrics[normMetric] || 0) + (item.Value || 0);
         });
@@ -465,38 +589,22 @@ export default function SupplyChainDashboard() {
                 const targetInv = m['Tot.Target Inv.'] || 0;
 
                 let status = null;
-                if ((totReq + indepReq) > inventory) {
-                     status = 'Critical';
-                } else if (inventory < targetInv && (totReq + indepReq) <= 0.001) {
-                    status = 'Watch Out';
-                }
+                if ((totReq + indepReq) > inventory) status = 'Critical';
+                else if (inventory < targetInv && (totReq + indepReq) <= 0.001) status = 'Watch Out';
 
                 if (status) {
                     if (day._dateObj <= leadTimeDate) hasInsideLeadTimeRisk = true;
-                    else {
-                        if (day._dateObj.getTime() < firstOutsideLeadTimeRiskDate) {
-                            firstOutsideLeadTimeRiskDate = day._dateObj.getTime();
-                        }
-                    }
+                    else if (day._dateObj.getTime() < firstOutsideLeadTimeRiskDate) firstOutsideLeadTimeRiskDate = day._dateObj.getTime();
 
-                    if (currentBlock && currentBlock.status === status && 
-                        (day._dateObj.getTime() - currentBlock.end.getTime() <= 86400000 + 10000)) {
+                    if (currentBlock && currentBlock.status === status && (day._dateObj.getTime() - currentBlock.end.getTime() <= 86400000 + 10000)) {
                         currentBlock.end = day._dateObj;
                         currentBlock.days += 1;
                     } else {
                         if (currentBlock) blocks.push(currentBlock);
-                        currentBlock = {
-                            start: day._dateObj,
-                            end: day._dateObj,
-                            status: status,
-                            days: 1
-                        };
+                        currentBlock = { start: day._dateObj, end: day._dateObj, status: status, days: 1 };
                     }
                 } else {
-                    if (currentBlock) {
-                        blocks.push(currentBlock);
-                        currentBlock = null;
-                    }
+                    if (currentBlock) { blocks.push(currentBlock); currentBlock = null; }
                 }
             });
             if (currentBlock) blocks.push(currentBlock);
@@ -512,12 +620,8 @@ export default function SupplyChainDashboard() {
 
             if (filteredBlocks.length > 0) {
                 rows.push({
-                    itemCode: group.itemCode,
-                    invOrg: group.invOrg,
-                    blocks: filteredBlocks,
-                    totalShortageDays,
-                    hasInsideLeadTimeRisk,
-                    firstOutsideLeadTimeRiskDate
+                    itemCode: group.itemCode, invOrg: group.invOrg, blocks: filteredBlocks,
+                    totalShortageDays, hasInsideLeadTimeRisk, firstOutsideLeadTimeRiskDate
                 });
             }
         });
@@ -536,13 +640,9 @@ export default function SupplyChainDashboard() {
         return rows;
     }, [filteredData, riskFilters, ganttSort]);
 
-    // --- Pivot Data (Detail View) ---
     const selectedItemData = useMemo(() => {
         if (!selectedItem) return null;
-        const itemsData = rawData.filter(d => 
-            d['Item Code'] === selectedItem.itemCode && 
-            d['Inv Org'] === selectedItem.invOrg
-        );
+        const itemsData = rawData.filter(d => d['Item Code'] === selectedItem.itemCode && d['Inv Org'] === selectedItem.invOrg);
         const startDate = dateRange.start ? new Date(dateRange.start) : null;
         const endDate = dateRange.end ? new Date(dateRange.end) : null;
         const uniqueDates = new Set();
@@ -553,7 +653,6 @@ export default function SupplyChainDashboard() {
              const itemDate = d._dateObj;
              if (startDate && itemDate < startDate) return;
              if (endDate && itemDate > endDate) return;
-
              uniqueDates.add(d.Date);
              const metric = d.Metric.trim();
              uniqueMetrics.add(metric);
@@ -581,7 +680,6 @@ export default function SupplyChainDashboard() {
         setGanttSort('itemCode');
         setHoveredDate(null);
         setViewMode('risk');
-        // Reset Date logic...
         const validTimes = [];
         for (let i = 0; i < rawData.length; i++) {
             const t = rawData[i]._dateObj ? rawData[i]._dateObj.getTime() : NaN;
@@ -594,10 +692,7 @@ export default function SupplyChainDashboard() {
                 if (validTimes[i] < minTime) minTime = validTimes[i];
                 if (validTimes[i] > maxTime) maxTime = validTimes[i];
             }
-            setDateRange({
-                start: toInputDate(new Date(minTime)),
-                end: toInputDate(new Date(maxTime))
-            });
+            setDateRange({ start: toInputDate(new Date(minTime)), end: toInputDate(new Date(maxTime)) });
         }
     };
 
@@ -631,42 +726,25 @@ export default function SupplyChainDashboard() {
                         </div>
                     </div>
                     <div className="flex items-center space-x-4">
-                        {/* View Mode Switcher */}
                         <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-                            <button 
-                                onClick={() => setViewMode('risk')}
-                                className={`flex items-center px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'risk' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                <Activity className="w-3.5 h-3.5 mr-1.5" />
-                                Risk Monitor
+                            <button onClick={() => setViewMode('risk')} className={`flex items-center px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'risk' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                                <Activity className="w-3.5 h-3.5 mr-1.5" />Risk Monitor
                             </button>
-                            <button 
-                                onClick={() => setViewMode('manufacturing')}
-                                className={`flex items-center px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'manufacturing' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                <Factory className="w-3.5 h-3.5 mr-1.5" />
-                                Manufacturing
+                            <button onClick={() => setViewMode('manufacturing')} className={`flex items-center px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'manufacturing' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                                <Factory className="w-3.5 h-3.5 mr-1.5" />Manufacturing
                             </button>
                         </div>
-
                         <label className="group flex items-center px-4 py-2 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-600 hover:text-indigo-700 rounded-xl cursor-pointer transition-all duration-200 text-sm font-medium shadow-sm">
-                            <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600 group-hover:-translate-y-0.5 transition-transform" />
-                            Import BOM
-                            <input type="file" accept=".csv" onChange={handleBomUpload} className="hidden" />
+                            <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600 group-hover:-translate-y-0.5 transition-transform" />Import BOM<input type="file" accept=".csv" onChange={handleBomUpload} className="hidden" />
                         </label>
-
                         <label className="group flex items-center px-4 py-2 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-600 hover:text-indigo-700 rounded-xl cursor-pointer transition-all duration-200 text-sm font-medium shadow-sm">
-                            <Upload className="w-4 h-4 mr-2 group-hover:-translate-y-0.5 transition-transform" />
-                            Import CSV
-                            <input type="file" accept=".csv" onChange={handleInventoryUpload} className="hidden" />
+                            <Upload className="w-4 h-4 mr-2 group-hover:-translate-y-0.5 transition-transform" />Import CSV<input type="file" accept=".csv" onChange={handleInventoryUpload} className="hidden" />
                         </label>
                     </div>
                 </div>
             </header>
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-
-                {/* Filters Container */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 md:p-8 transition-shadow hover:shadow-md">
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center space-x-3 text-slate-800">
@@ -704,12 +782,24 @@ export default function SupplyChainDashboard() {
                     </div>
                 </div>
 
-                {/* MAIN VISUALIZATION AREA */}
+                {/* --- NEW: NETWORK MAP VISUALIZATION --- */}
+                {viewMode === 'manufacturing' && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 relative z-10">
+                        <div className="flex items-center justify-between mb-4">
+                             <div className="flex items-center space-x-3">
+                                <div className="p-2 rounded-lg bg-blue-50 text-blue-600"><Network className="w-5 h-5" /></div>
+                                <div><h2 className="text-lg font-bold text-slate-900 tracking-tight">Supply Chain Network Map</h2><p className="text-sm text-slate-500">Material Flow & Inventory Health</p></div>
+                            </div>
+                        </div>
+                        <SupplyChainMap selectedItem={selectedItem} bomData={bomData} inventoryData={rawData} dateRange={dateRange} />
+                    </div>
+                )}
+
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 md:p-8 relative z-10">
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center space-x-3">
-                            <div className={`p-2 rounded-lg ${viewMode === 'risk' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
-                                {viewMode === 'risk' ? <Activity className="w-5 h-5" /> : <Network className="w-5 h-5" />}
+                            <div className={`p-2 rounded-lg ${viewMode === 'risk' ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                                {viewMode === 'risk' ? <Activity className="w-5 h-5" /> : <Factory className="w-5 h-5" />}
                             </div>
                             <div>
                                 <h2 className="text-lg font-bold text-slate-900 tracking-tight">
@@ -724,19 +814,11 @@ export default function SupplyChainDashboard() {
                     </div>
                     
                     <div className="h-[400px] w-full">
-                        {/* CONDITIONAL CHART RENDER */}
                         {viewMode === 'risk' ? (
-                            // 1. RISK CHART (Area)
                             riskChartData.length > 0 ? (
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={riskChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} onMouseMove={(e) => e && e.activeLabel && setHoveredDate(e.activeLabel)} onMouseLeave={() => setHoveredDate(null)}>
-                                        <defs>
-                                            {colors.map((color, index) => (
-                                                <linearGradient key={index} id={`color${index}`} x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor={color} stopOpacity={0.3}/><stop offset="95%" stopColor={color} stopOpacity={0}/>
-                                                </linearGradient>
-                                            ))}
-                                        </defs>
+                                        <defs>{colors.map((color, index) => (<linearGradient key={index} id={`color${index}`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={color} stopOpacity={0.3}/><stop offset="95%" stopColor={color} stopOpacity={0}/></linearGradient>))}</defs>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                         <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} tickMargin={15} tickLine={false} axisLine={false} tickFormatter={(str) => `${new Date(str).getMonth() + 1}/${new Date(str).getDate()}`} />
                                         <YAxis stroke="#94a3b8" fontSize={12} width={60} tickLine={false} axisLine={false} tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value} />
@@ -749,7 +831,6 @@ export default function SupplyChainDashboard() {
                                 </ResponsiveContainer>
                             ) : <EmptyState msg="No trend data available" />
                         ) : (
-                            // 2. PRODUCTION CHART (Bar)
                             selectedItem ? (
                                 productionData.length > 0 ? (
                                     <ResponsiveContainer width="100%" height="100%">
@@ -759,9 +840,7 @@ export default function SupplyChainDashboard() {
                                             <YAxis stroke="#94a3b8" fontSize={12} width={60} tickLine={false} axisLine={false} />
                                             <Tooltip content={<CustomTooltip />} />
                                             <Legend iconType="circle" wrapperStyle={{paddingTop: '20px'}}/>
-                                            {/* Target FG Inventory */}
                                             <Bar dataKey="Tot.Inventory (Forecast)" name="FG Inventory" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
-                                            {/* Max Production from RM */}
                                             <Line type="monotone" dataKey="Max Prod (BAB250-MR1)" name="Max Prod from RM" stroke="#10b981" strokeWidth={2} dot={{r: 4}} />
                                         </ComposedChart>
                                     </ResponsiveContainer>
@@ -771,7 +850,6 @@ export default function SupplyChainDashboard() {
                     </div>
                 </div>
 
-                {/* Gantt Section (Always Visible for Selection) */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 flex flex-col overflow-hidden">
                     <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
                         <div className="flex items-center space-x-3">
@@ -834,7 +912,6 @@ export default function SupplyChainDashboard() {
                     </div>
                 </div>
 
-                {/* --- DETAIL VIEW (Floating Panel - Only for Risk Mode or General Info) --- */}
                 {selectedItem && selectedItemData && viewMode === 'risk' && (
                     <div className="fixed inset-x-0 bottom-0 z-50 bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] transform transition-all duration-300 ease-in-out h-96 flex flex-col animate-in slide-in-from-bottom-10">
                         <div className="px-6 py-4 bg-white/50 border-b border-slate-100 flex items-center justify-between">
