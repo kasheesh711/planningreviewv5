@@ -3,7 +3,7 @@ import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine, ComposedChart
 } from 'recharts';
 import {
-    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, ArrowLeftRight, MapPin, RefreshCw, RotateCcw, PanelLeft
+    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, ArrowLeftRight, MapPin, RefreshCw, RotateCcw, Sidebar
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -35,7 +35,10 @@ const parseCSV = (csvText) => {
                 row[header] = value;
             });
             if (row.Date) {
-                row._dateObj = new Date(row.Date);
+                const d = new Date(row.Date);
+                if (!isNaN(d.getTime())) {
+                    row._dateObj = d;
+                }
             }
             if (row.Metric) {
                 row.Metric = row.Metric.trim();
@@ -330,7 +333,6 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
         </div>
     </div>
 ));
-
 
 // --- Supply Chain Network Map Component ---
 const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRange, onOpenDetails, onNodeSelect }) => {
@@ -685,8 +687,9 @@ export default function SupplyChainDashboard() {
         setRawData(data);
         const validTimes = [];
         for (let i = 0; i < data.length; i++) {
-            const t = data[i]._dateObj ? data[i]._dateObj.getTime() : NaN;
-            if (!isNaN(t)) validTimes.push(t);
+            if(data[i]._dateObj && !isNaN(data[i]._dateObj.getTime())) {
+                validTimes.push(data[i]._dateObj.getTime());
+            }
         }
         if (validTimes.length > 0) {
             let minTime = validTimes[0];
@@ -702,7 +705,6 @@ export default function SupplyChainDashboard() {
         }
     };
 
-    // --- Fetch from Google Sheets ---
     useEffect(() => {
         const fetchData = async () => {
             if (!GOOGLE_SHEET_CONFIG.INVENTORY_URL || !GOOGLE_SHEET_CONFIG.BOM_URL) {
@@ -778,7 +780,6 @@ export default function SupplyChainDashboard() {
         reader.readAsText(file);
     };
 
-    // --- Filter Logic ---
     const options = useMemo(() => {
         const getFilteredDataForField = (excludeKey) => {
             return rawData.filter(item => {
@@ -826,7 +827,7 @@ export default function SupplyChainDashboard() {
         });
     }, [rawData, filters, dateRange]);
 
-    const riskChartData = useMemo(() => {
+    const chartData = useMemo(() => {
         let sourceData = filteredData;
         if (selectedItem) {
             sourceData = rawData.filter(d => 
@@ -843,8 +844,12 @@ export default function SupplyChainDashboard() {
         );
 
         chartFiltered.forEach(item => {
-            if (!grouped[item.Date]) grouped[item.Date] = { date: item.Date, _dateObj: item._dateObj };
-            if (!grouped[item.Date][item.Metric]) grouped[item.Date][item.Metric] = 0;
+            if (!grouped[item.Date]) {
+                grouped[item.Date] = { date: item.Date, _dateObj: item._dateObj };
+            }
+            if (!grouped[item.Date][item.Metric]) {
+                grouped[item.Date][item.Metric] = 0;
+            }
             grouped[item.Date][item.Metric] += (item.Value || 0);
         });
         return Object.values(grouped).sort((a, b) => a._dateObj - b._dateObj);
@@ -1004,6 +1009,16 @@ export default function SupplyChainDashboard() {
         return { left: `${left}%`, width: `${width}%` };
     };
 
+    const onNodeSelectCallback = useCallback((node) => {
+        if (node) setSelectedItem({ itemCode: node.id, invOrg: node.invOrg, type: node.type });
+        else setSelectedItem(null);
+    }, []);
+
+    const onOpenDetailsCallback = useCallback((node) => {
+        setSelectedItem({ itemCode: node.id, invOrg: node.invOrg, type: node.type });
+        setIsDetailOpen(true);
+    }, []);
+
     const Y_AXIS_WIDTH = 200; 
 
     return (
@@ -1037,7 +1052,7 @@ export default function SupplyChainDashboard() {
                 {/* --- LEFT SIDEBAR PLACEHOLDER (10%) --- */}
                 <div className="hidden xl:block w-[5%] 2xl:w-[10%] border-r border-slate-200 bg-slate-50/50">
                     <div className="h-full w-full flex items-center justify-center text-slate-300">
-                        <PanelLeft className="w-6 h-6 opacity-20" />
+                        <Sidebar className="w-6 h-6 opacity-20" />
                     </div>
                 </div>
 
@@ -1057,14 +1072,8 @@ export default function SupplyChainDashboard() {
                                 bomData={bomData} 
                                 inventoryData={rawData} 
                                 dateRange={dateRange} 
-                                onOpenDetails={(node) => {
-                                    setSelectedItem({ itemCode: node.id, invOrg: node.invOrg, type: node.type });
-                                    setIsDetailOpen(true);
-                                }}
-                                onNodeSelect={(node) => {
-                                    if (node) setSelectedItem({ itemCode: node.id, invOrg: node.invOrg, type: node.type });
-                                    else setSelectedItem(null);
-                                }}
+                                onOpenDetails={onOpenDetailsCallback}
+                                onNodeSelect={onNodeSelectCallback}
                             />
                         </div>
                     </div>
@@ -1093,14 +1102,15 @@ export default function SupplyChainDashboard() {
                             </div>
                         </div>
                         <div className="flex-1 overflow-y-auto relative scrollbar-thin scrollbar-thumb-slate-200">
+                            {/* Reused Gantt Body Logic from previous iterations for brevity */}
                             {ganttData.length > 0 ? (
                                 ganttData.map((row, idx) => (
                                     <div key={idx} className={`flex items-center border-b border-slate-50 h-12 group transition-all duration-200 ${selectedItem && selectedItem.itemCode === row.itemCode && selectedItem.invOrg === row.invOrg ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}>
-                                        <div className="flex-shrink-0 px-6 py-2 border-r border-slate-50 truncate cursor-pointer h-full flex flex-col justify-center" style={{ width: Y_AXIS_WIDTH }} onClick={() => setSelectedItem(row)}>
+                                        <div className="flex-shrink-0 px-6 py-2 border-r border-slate-50 truncate cursor-pointer h-full flex flex-col justify-center" style={{ width: Y_AXIS_WIDTH }} onClick={() => setSelectedItem({ itemCode: row.itemCode, invOrg: row.invOrg })}>
                                             <div className="font-bold text-slate-700 text-sm truncate group-hover:text-indigo-600 transition-colors">{row.itemCode}</div>
                                             <div className="text-xs text-slate-400 font-mono mt-0.5">{row.invOrg}</div>
                                         </div>
-                                        <div className="flex-1 relative h-full cursor-pointer" style={{ marginLeft: '20px', marginRight: '30px' }} onClick={() => setSelectedItem(row)}>
+                                        <div className="flex-1 relative h-full cursor-pointer" style={{ marginLeft: '20px', marginRight: '30px' }} onClick={() => setSelectedItem({ itemCode: row.itemCode, invOrg: row.invOrg })}>
                                             <div className="absolute inset-0 flex opacity-30 pointer-events-none">
                                                 <div className="w-1/4 border-r border-slate-100 h-full"></div><div className="w-1/4 border-r border-slate-100 h-full"></div><div className="w-1/4 border-r border-slate-100 h-full"></div>
                                             </div>
@@ -1224,7 +1234,7 @@ export default function SupplyChainDashboard() {
                         </div>
                     </div>
                 )}
-            </div>
+            </main>
             <style jsx global>{`@keyframes pulse-slow { 0%, 100% { opacity: 1; } 50% { opacity: .85; } } .animate-pulse-slow { animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }`}</style>
         </div>
     );
