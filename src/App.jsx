@@ -3,7 +3,7 @@ import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine, ComposedChart
 } from 'recharts';
 import {
-    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network
+    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet
 } from 'lucide-react';
 
 // --- Helper for CSV Parsing ---
@@ -20,7 +20,7 @@ const parseCSV = (csvText) => {
             const row = {};
             headers.forEach((header, index) => {
                 let value = currentLine[index].trim();
-                if (!isNaN(value) && value !== '' && (header === 'Value' || header.includes('Qty'))) {
+                if (!isNaN(value) && value !== '' && (header === 'Value' || header.includes('Qty') || header.includes('Ratio'))) {
                     value = parseFloat(value);
                 }
                 row[header] = value;
@@ -56,7 +56,7 @@ const getLeadTimeWeeks = (invOrg) => {
     return 4; // Default
 };
 
-// --- Sample Data (Enhanced for Manufacturing Demo) ---
+// --- Sample Data ---
 const SAMPLE_CSV = `Factory,Type,Item Code,Inv Org,Item Class,UOM,Strategy,Original Item String,Metric,Start,Date,Value
 SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Req.,0,11/19/2025,9910.16
 SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Inventory (Forecast),0,11/19/2025,5000.00
@@ -69,9 +69,8 @@ SF,RM,BAB250-MR1,MYBGPM,MR,KG,MTS,BAB250-MR1/MYBGPM/MR/KG/MTS,Tot.Inventory (For
 NR,RM,BAB250-MR1,THRYPM,MR,LM,NST(MTS),BAB250-MR1/THRYPM/MR/LM/NST(MTS),Indep. Req. (Forecast),0,12/17/2025,150
 NR,RM,BAB250-MR1,THRYPM,MR,LM,NST(MTS),BAB250-MR1/THRYPM/MR/LM/NST(MTS),Tot.Inventory (Forecast),0,12/17/2025,100`;
 
-// --- Sample BOM (Bill of Materials) ---
-const SAMPLE_BOM = [
-    // 0.5 kg of BAB250 required to make 1 unit of AAG620
+// --- Sample BOM (Default State) ---
+const DEFAULT_BOM = [
     { parent: 'AAG620-MR2', child: 'BAB250-MR1', ratio: 0.5 }, 
 ];
 
@@ -221,6 +220,7 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false }) =>
 
 export default function SupplyChainDashboard() {
     const [rawData, setRawData] = useState([]);
+    const [bomData, setBomData] = useState(DEFAULT_BOM);
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
     const [filters, setFilters] = useState({
         itemCode: 'All',
@@ -231,8 +231,6 @@ export default function SupplyChainDashboard() {
         metric: ['All']
     });
     const [isLeadTimeMode, setIsLeadTimeMode] = useState(false);
-    
-    // --- View Mode: Risk (Gantt) vs Manufacturing (BOM) ---
     const [viewMode, setViewMode] = useState('risk'); // 'risk' | 'manufacturing'
 
     // Interaction States
@@ -247,6 +245,7 @@ export default function SupplyChainDashboard() {
     });
     const [ganttSort, setGanttSort] = useState('itemCode');
 
+    // --- Loaders ---
     const handleDataLoad = (data) => {
         setRawData(data);
         const validTimes = [];
@@ -273,7 +272,7 @@ export default function SupplyChainDashboard() {
         handleDataLoad(parsed);
     }, []);
 
-    const handleFileUpload = (event) => {
+    const handleInventoryUpload = (event) => {
         const file = event.target.files[0];
         if (!file) return;
         const reader = new FileReader();
@@ -281,6 +280,26 @@ export default function SupplyChainDashboard() {
             const text = e.target.result;
             const parsed = parseCSV(text);
             handleDataLoad(parsed);
+        };
+        reader.readAsText(file);
+    };
+
+    const handleBomUpload = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const text = e.target.result;
+            const rawParsed = parseCSV(text);
+            
+            // Robust mapping for BOM columns
+            const processedBom = rawParsed.map(row => ({
+                parent: row['Parent'] || row['Parent Item'] || row['parent'],
+                child: row['Child'] || row['Child Item'] || row['child'],
+                ratio: parseFloat(row['Ratio'] || row['Quantity Per'] || row['qty'] || 0)
+            })).filter(row => row.parent && row.child);
+
+            setBomData(processedBom);
         };
         reader.readAsText(file);
     };
@@ -366,11 +385,10 @@ export default function SupplyChainDashboard() {
     const productionData = useMemo(() => {
         if (viewMode !== 'manufacturing' || !selectedItem) return [];
 
-        // Find ingredients in BOM
-        const ingredients = SAMPLE_BOM.filter(b => b.parent === selectedItem.itemCode);
+        // Use bomData state instead of hardcoded constant
+        const ingredients = bomData.filter(b => b.parent === selectedItem.itemCode);
         if (ingredients.length === 0) return [];
 
-        // 1. Get FG Forecast/Inventory for the specific item
         const fgData = rawData.filter(d => 
             d['Item Code'] === selectedItem.itemCode && 
             d['Inv Org'] === selectedItem.invOrg &&
@@ -378,16 +396,13 @@ export default function SupplyChainDashboard() {
             (!dateRange.end || d._dateObj <= new Date(dateRange.end))
         );
 
-        // Group by date
         const grouped = {};
         fgData.forEach(d => {
             if (!grouped[d.Date]) grouped[d.Date] = { date: d.Date, _dateObj: d._dateObj };
             grouped[d.Date][d.Metric] = (grouped[d.Date][d.Metric] || 0) + d.Value;
         });
 
-        // 2. Calculate Max Production per RM
         ingredients.forEach(ing => {
-            // Find RM Data at same plant (simplified assumption)
             const rmData = rawData.filter(d => 
                 d['Item Code'] === ing.child && 
                 d['Inv Org'] === selectedItem.invOrg &&
@@ -398,7 +413,6 @@ export default function SupplyChainDashboard() {
             
             rmData.forEach(rm => {
                 if (grouped[rm.Date]) {
-                    // Formula: RM Inventory / Ratio = Possible FG Units
                     const possibleUnits = rm.Value / ing.ratio;
                     grouped[rm.Date][`Max Prod (${ing.child})`] = possibleUnits;
                 }
@@ -406,7 +420,7 @@ export default function SupplyChainDashboard() {
         });
 
         return Object.values(grouped).sort((a,b) => a._dateObj - b._dateObj);
-    }, [viewMode, selectedItem, rawData, dateRange]);
+    }, [viewMode, selectedItem, rawData, dateRange, bomData]);
 
 
     // --- Gantt Data Logic ---
@@ -567,6 +581,7 @@ export default function SupplyChainDashboard() {
         setGanttSort('itemCode');
         setHoveredDate(null);
         setViewMode('risk');
+        // Reset Date logic...
         const validTimes = [];
         for (let i = 0; i < rawData.length; i++) {
             const t = rawData[i]._dateObj ? rawData[i]._dateObj.getTime() : NaN;
@@ -635,9 +650,15 @@ export default function SupplyChainDashboard() {
                         </div>
 
                         <label className="group flex items-center px-4 py-2 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-600 hover:text-indigo-700 rounded-xl cursor-pointer transition-all duration-200 text-sm font-medium shadow-sm">
+                            <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600 group-hover:-translate-y-0.5 transition-transform" />
+                            Import BOM
+                            <input type="file" accept=".csv" onChange={handleBomUpload} className="hidden" />
+                        </label>
+
+                        <label className="group flex items-center px-4 py-2 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-600 hover:text-indigo-700 rounded-xl cursor-pointer transition-all duration-200 text-sm font-medium shadow-sm">
                             <Upload className="w-4 h-4 mr-2 group-hover:-translate-y-0.5 transition-transform" />
                             Import CSV
-                            <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+                            <input type="file" accept=".csv" onChange={handleInventoryUpload} className="hidden" />
                         </label>
                     </div>
                 </div>
@@ -647,7 +668,6 @@ export default function SupplyChainDashboard() {
 
                 {/* Filters Container */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 md:p-8 transition-shadow hover:shadow-md">
-                    {/* ... (Existing Filters: Date, Selects, Lead Time Toggle) ... */}
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center space-x-3 text-slate-800">
                             <div className="p-2 bg-blue-50 rounded-lg"><Filter className="w-5 h-5 text-indigo-600" /></div>
