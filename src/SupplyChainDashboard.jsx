@@ -295,8 +295,8 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
                 </h3>
                 <div className="flex gap-1">
                     <button onClick={() => setSort('alpha')} className={`p-1.5 rounded transition-colors ${sortValue === 'alpha' ? (isDarkMode ? 'bg-slate-800 text-indigo-400' : 'bg-white shadow-sm text-indigo-600') : 'opacity-40 hover:opacity-100'}`} title="Sort Alpha"><ArrowUpDown className="w-3.5 h-3.5" /></button>
-                    {/* MODIFIED: Sort Inv now uses 'invAsc' for lowest first */}
-                    <button onClick={() => setSort('invAsc')} className={`p-1.5 rounded transition-colors ${sortValue === 'invAsc' ? (isDarkMode ? 'bg-slate-800 text-indigo-400' : 'bg-white shadow-sm text-indigo-600') : 'opacity-40 hover:opacity-100'}`} title="Sort Inv (Low-High)"><Activity className="w-3.5 h-3.5" /></button>
+                    {/* CHANGED: 'invAsc' means Lowest First */}
+                    <button onClick={() => setSort('invAsc')} className={`p-1.5 rounded transition-colors ${sortValue === 'invAsc' ? (isDarkMode ? 'bg-slate-800 text-indigo-400' : 'bg-white shadow-sm text-indigo-600') : 'opacity-40 hover:opacity-100'}`} title="Sort Inv (Low-to-High)"><Activity className="w-3.5 h-3.5" /></button>
                 </div>
             </div>
             <div className="relative mb-3">
@@ -331,6 +331,8 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
     const [searchTermRM, setSearchTermRM] = useState("");
     const [searchTermFG, setSearchTermFG] = useState("");
     const [searchTermDC, setSearchTermDC] = useState(""); 
+    
+    // Sort States
     const [sortRM, setSortRM] = useState("alpha"); 
     const [sortFG, setSortFG] = useState("alpha");
     const [sortDC, setSortDC] = useState("alpha"); 
@@ -345,6 +347,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         setMapFocus(null);
         setSearchTermRM(""); setSearchTermFG(""); setSearchTermDC("");
         setRmClassFilter('All'); setFgPlantFilter('All'); setDcFilter('All');
+        setSortRM('alpha'); setSortFG('alpha'); setSortDC('alpha');
         onNodeSelect(null); 
     };
 
@@ -516,9 +519,11 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
         const sorter = (a, b, method) => {
             if (method === 'alpha') return a.id.localeCompare(b.id);
-            if (method === 'invAsc') return a.currentInv - b.currentInv; // LOWEST FIRST
+            // invAsc = Lowest Inventory First (Ascending)
+            if (method === 'invAsc') return a.currentInv - b.currentInv;
             return 0;
         };
+        
         rmNodes.sort((a, b) => sorter(a, b, sortRM));
         fgNodes.sort((a, b) => sorter(a, b, sortFG));
         dcNodes.sort((a, b) => sorter(a, b, sortDC));
