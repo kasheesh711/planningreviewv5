@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine, ComposedChart
 } from 'recharts';
@@ -288,7 +288,12 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
     const [searchTermRM, setSearchTermRM] = useState("");
     const [searchTermFG, setSearchTermFG] = useState("");
     const [sortRM, setSortRM] = useState("alpha"); // 'alpha' | 'invDesc'
-    const [sortFG, setSortFG] = useState("alpha"); 
+    const [sortFG, setSortFG] = useState("alpha");
+
+    const mapDateBounds = useMemo(() => ({
+        start: dateRange.start ? new Date(dateRange.start) : null,
+        end: dateRange.end ? new Date(dateRange.end) : null,
+    }), [dateRange]);
 
     // Sync parent selection to local focus initially
     useEffect(() => {
@@ -301,65 +306,84 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         }
     }, [selectedItemFromParent]);
 
-    // --- Helper to aggregate weekly health ---
-    const getWeeklyHealth = (itemCode, invOrg) => {
-        const records = inventoryData.filter(d => 
-            d['Item Code'] === itemCode && 
-            d['Inv Org'] === invOrg &&
-            (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
-            (!dateRange.end || d._dateObj <= new Date(dateRange.end))
-        );
-        
-        const weeklyMap = {};
-        records.forEach(r => {
-            const weekNum = Math.floor((r._dateObj.getTime() - new Date(r._dateObj.getFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000));
-            if (!weeklyMap[weekNum]) weeklyMap[weekNum] = { inv: 0, target: 0, count: 0 };
-            
-            if (r.Metric === 'Tot.Inventory (Forecast)') weeklyMap[weekNum].inv += r.Value;
-            if (r.Metric === 'Tot.Target Inv.') weeklyMap[weekNum].target += r.Value;
-            if (r.Metric === 'Tot.Inventory (Forecast)') weeklyMap[weekNum].count++;
+    const toWeekNumber = useCallback((dateObj) => Math.floor((dateObj.getTime() - new Date(dateObj.getFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000)), []);
+
+    const inventoryStats = useMemo(() => {
+        const stats = new Map();
+        const { start, end } = mapDateBounds;
+
+        inventoryData.forEach(entry => {
+            const date = entry._dateObj;
+            if ((start && date < start) || (end && date > end)) return;
+
+            const key = `${entry['Item Code']}|${entry['Inv Org']}`;
+            let record = stats.get(key);
+            if (!record) {
+                record = {
+                    itemCode: entry['Item Code'],
+                    invOrg: entry['Inv Org'],
+                    type: entry.Type,
+                    weekly: new Map(),
+                    latestInv: null
+                };
+                stats.set(key, record);
+            }
+
+            if (!date) return;
+            const weekKey = toWeekNumber(date);
+            const bucket = record.weekly.get(weekKey) || { inv: 0, target: 0, count: 0 };
+
+            if (entry.Metric === 'Tot.Inventory (Forecast)') {
+                bucket.inv += entry.Value || 0;
+                bucket.count += 1;
+                if (!record.latestInv || date > record.latestInv.date) {
+                    record.latestInv = { date, value: entry.Value || 0 };
+                }
+            } else if (entry.Metric === 'Tot.Target Inv.') {
+                bucket.target += entry.Value || 0;
+            }
+
+            record.weekly.set(weekKey, bucket);
         });
 
-        return Object.keys(weeklyMap).sort().map(w => {
-            const d = weeklyMap[w];
-            const avgInv = d.count ? d.inv / d.count : 0;
-            const avgTarget = d.count ? d.target / d.count : 1; // avoid div 0
-            const pct = avgTarget > 0 ? (avgInv / avgTarget) * 100 : 0;
-            return { week: w, pct };
-        });
-    };
+        return stats;
+    }, [inventoryData, mapDateBounds, toWeekNumber]);
+
+    const buildWeeklyHealth = useCallback((weeklyMap) => {
+        if (!weeklyMap || weeklyMap.size === 0) return [];
+        return Array.from(weeklyMap.entries())
+            .sort((a, b) => a[0] - b[0])
+            .map(([week, data]) => {
+                const avgInv = data.count ? data.inv / data.count : 0;
+                const avgTarget = data.count ? data.target / data.count : 1; // avoid div 0
+                const pct = avgTarget > 0 ? (avgInv / avgTarget) * 100 : 0;
+                return { week, pct };
+            });
+    }, []);
 
     // --- Helper to get node stats ---
-    const getNodeStats = (itemCode, invOrg, type) => {
-        const records = inventoryData.filter(d => 
-            d['Item Code'] === itemCode && 
-            d['Inv Org'] === invOrg &&
-            d.Metric === 'Tot.Inventory (Forecast)'
-        );
-        // Use latest available date for "Current Inv"
-        const sorted = records.sort((a,b) => b._dateObj - a._dateObj);
-        const currentInv = sorted.length > 0 ? sorted[0].Value : 0;
+    const getNodeStats = useCallback((itemCode, invOrg, type) => {
+        const record = inventoryStats.get(`${itemCode}|${invOrg}`);
+        const currentInv = record?.latestInv?.value ?? 0;
         const status = currentInv < 0 ? 'Critical' : (currentInv < 1000 ? 'Low' : 'Good');
-        
+
         return {
             id: itemCode,
-            itemCode: itemCode, // For detail view compat
-            invOrg: invOrg,
+            itemCode,
+            invOrg,
             type,
             status,
             currentInv,
-            weeklyHealth: getWeeklyHealth(itemCode, invOrg)
+            weeklyHealth: buildWeeklyHealth(record?.weekly)
         };
-    };
+    }, [inventoryStats, buildWeeklyHealth]);
 
     // --- Compute Lists based on Map Focus ---
     const { rmList, fgList } = useMemo(() => {
-        // Base lists (all available in raw data for the selected plants)
-        // Actually, we should limit to what's in BOM for connections, but user wants scrollable lists.
-        // Let's derive distinct items from Inventory Data first.
-        
-        let allRMs = [...new Set(inventoryData.filter(d => d.Type === 'RM').map(d => d['Item Code']))];
-        let allFGs = [...new Set(inventoryData.filter(d => d.Type === 'FG').map(d => d['Item Code']))];
+        const statsArray = Array.from(inventoryStats.values());
+
+        let allRMs = [...new Set(statsArray.filter(d => d.type === 'RM').map(d => d.itemCode))];
+        let allFGs = [...new Set(statsArray.filter(d => d.type === 'FG').map(d => d.itemCode))];
 
         // Apply Bi-Directional Filtering
         if (mapFocus) {
@@ -375,16 +399,13 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         }
 
         // Map to full node objects
-        let rmNodes = allRMs.map(id => {
-            // Find org from data (first match or specific if known)
-            const record = inventoryData.find(d => d['Item Code'] === id && d.Type === 'RM'); 
-            return record ? getNodeStats(id, record['Inv Org'], 'RM') : null;
-        }).filter(Boolean);
+        let rmNodes = statsArray
+            .filter(record => record.type === 'RM' && allRMs.includes(record.itemCode))
+            .map(record => getNodeStats(record.itemCode, record.invOrg, 'RM'));
 
-        let fgNodes = allFGs.map(id => {
-            const record = inventoryData.find(d => d['Item Code'] === id && d.Type === 'FG');
-            return record ? getNodeStats(id, record['Inv Org'], 'FG') : null;
-        }).filter(Boolean);
+        let fgNodes = statsArray
+            .filter(record => record.type === 'FG' && allFGs.includes(record.itemCode))
+            .map(record => getNodeStats(record.itemCode, record.invOrg, 'FG'));
 
         // Apply Search
         if (searchTermRM) rmNodes = rmNodes.filter(n => n.id.toLowerCase().includes(searchTermRM.toLowerCase()));
@@ -401,7 +422,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
         return { rmList: rmNodes, fgList: fgNodes };
 
-    }, [inventoryData, bomData, mapFocus, searchTermRM, searchTermFG, sortRM, sortFG, dateRange]);
+    }, [inventoryStats, bomData, mapFocus, searchTermRM, searchTermFG, sortRM, sortFG]);
 
     // --- Render Column Helper ---
     const RenderColumn = ({ title, count, items, type, searchTerm, setSearchTerm, setSort, sortValue, isActiveCol }) => (
@@ -510,6 +531,11 @@ export default function SupplyChainDashboard() {
     });
     const [ganttSort, setGanttSort] = useState('itemCode');
 
+    const dateBounds = useMemo(() => ({
+        start: dateRange.start ? new Date(dateRange.start) : null,
+        end: dateRange.end ? new Date(dateRange.end) : null,
+    }), [dateRange]);
+
     const handleDataLoad = (data) => {
         setRawData(data);
         const validTimes = [];
@@ -571,11 +597,10 @@ export default function SupplyChainDashboard() {
     // --- Filter Logic ---
     const options = useMemo(() => {
         const getFilteredDataForField = (excludeKey) => {
+            const { start, end } = dateBounds;
             return rawData.filter(item => {
                 const itemDate = item._dateObj;
-                const startDate = dateRange.start ? new Date(dateRange.start) : null;
-                const endDate = dateRange.end ? new Date(dateRange.end) : null;
-                const inDateRange = (!startDate || itemDate >= startDate) && (!endDate || itemDate <= endDate);
+                const inDateRange = (!start || itemDate >= start) && (!end || itemDate <= end);
                 if (!inDateRange) return false;
                 return (
                     inDateRange &&
@@ -596,14 +621,13 @@ export default function SupplyChainDashboard() {
             strategies: getUnique(getFilteredDataForField('strategy'), 'Strategy'),
             metrics: getUnique(getFilteredDataForField('metric'), 'Metric'),
         };
-    }, [rawData, filters, dateRange]);
+    }, [rawData, filters, dateBounds]);
 
     const filteredData = useMemo(() => {
+        const { start, end } = dateBounds;
         return rawData.filter(item => {
             const itemDate = item._dateObj;
-            const startDate = dateRange.start ? new Date(dateRange.start) : null;
-            const endDate = dateRange.end ? new Date(dateRange.end) : null;
-            const inDateRange = (!startDate || itemDate >= startDate) && (!endDate || itemDate <= endDate);
+            const inDateRange = (!start || itemDate >= start) && (!end || itemDate <= end);
             
             return (
                 inDateRange &&
@@ -614,16 +638,17 @@ export default function SupplyChainDashboard() {
                 (filters.strategy === 'All' || item['Strategy'] === filters.strategy)
             );
         });
-    }, [rawData, filters, dateRange]);
+    }, [rawData, filters, dateBounds]);
 
     const riskChartData = useMemo(() => {
         let sourceData = filteredData;
         if (selectedItem) {
-            sourceData = rawData.filter(d => 
-                d['Item Code'] === selectedItem.itemCode && 
+            const { start, end } = dateBounds;
+            sourceData = rawData.filter(d =>
+                d['Item Code'] === selectedItem.itemCode &&
                 d['Inv Org'] === selectedItem.invOrg &&
-                (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
-                (!dateRange.end || d._dateObj <= new Date(dateRange.end))
+                (!start || d._dateObj >= start) &&
+                (!end || d._dateObj <= end)
             );
         }
 
@@ -638,7 +663,7 @@ export default function SupplyChainDashboard() {
             grouped[item.Date][item.Metric] += (item.Value || 0);
         });
         return Object.values(grouped).sort((a, b) => a._dateObj - b._dateObj);
-    }, [filteredData, filters.metric, selectedItem, rawData, dateRange, viewMode]);
+    }, [filteredData, filters.metric, selectedItem, rawData, dateBounds, viewMode]);
 
     const productionData = useMemo(() => {
         if (viewMode !== 'manufacturing' || !selectedItem) return [];
@@ -649,11 +674,13 @@ export default function SupplyChainDashboard() {
         );
         if (ingredients.length === 0) return [];
 
-        const fgData = rawData.filter(d => 
-            d['Item Code'] === selectedItem.itemCode && 
+        const { start, end } = dateBounds;
+
+        const fgData = rawData.filter(d =>
+            d['Item Code'] === selectedItem.itemCode &&
             d['Inv Org'] === selectedItem.invOrg &&
-            (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
-            (!dateRange.end || d._dateObj <= new Date(dateRange.end))
+            (!start || d._dateObj >= start) &&
+            (!end || d._dateObj <= end)
         );
 
         const grouped = {};
@@ -663,12 +690,12 @@ export default function SupplyChainDashboard() {
         });
 
         ingredients.forEach(ing => {
-            const rmData = rawData.filter(d => 
-                d['Item Code'] === ing.child && 
+            const rmData = rawData.filter(d =>
+                d['Item Code'] === ing.child &&
                 d['Inv Org'] === selectedItem.invOrg &&
                 d.Metric === 'Tot.Inventory (Forecast)' &&
-                (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
-                (!dateRange.end || d._dateObj <= new Date(dateRange.end))
+                (!start || d._dateObj >= start) &&
+                (!end || d._dateObj <= end)
             );
             
             rmData.forEach(rm => {
@@ -680,7 +707,7 @@ export default function SupplyChainDashboard() {
         });
 
         return Object.values(grouped).sort((a,b) => a._dateObj - b._dateObj);
-    }, [viewMode, selectedItem, rawData, dateRange, bomData]);
+    }, [viewMode, selectedItem, rawData, dateBounds, bomData]);
 
     const ganttData = useMemo(() => {
         const grouped = {};
@@ -769,8 +796,8 @@ export default function SupplyChainDashboard() {
     const selectedItemData = useMemo(() => {
         if (!selectedItem) return null;
         const itemsData = rawData.filter(d => d['Item Code'] === selectedItem.itemCode && d['Inv Org'] === selectedItem.invOrg);
-        const startDate = dateRange.start ? new Date(dateRange.start) : null;
-        const endDate = dateRange.end ? new Date(dateRange.end) : null;
+        const startDate = dateBounds.start;
+        const endDate = dateBounds.end;
         const uniqueDates = new Set();
         const uniqueMetrics = new Set();
         const valueMap = {};
@@ -789,7 +816,7 @@ export default function SupplyChainDashboard() {
         const sortedDates = Array.from(uniqueDates).sort((a,b) => new Date(a) - new Date(b));
         const sortedMetrics = Array.from(uniqueMetrics).sort();
         return { dates: sortedDates, metrics: sortedMetrics, values: valueMap };
-    }, [selectedItem, rawData, dateRange]);
+    }, [selectedItem, rawData, dateBounds]);
 
     const activeMetrics = useMemo(() => {
         if (filters.metric.includes('All')) return Array.from(new Set(filteredData.map(d => d.Metric)));
