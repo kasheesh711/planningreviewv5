@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
-    LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine
+    LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine, ComposedChart
 } from 'recharts';
 import {
-    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, MapPin, RefreshCw, RotateCcw
+    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, ArrowLeftRight, MapPin, RefreshCw, RotateCcw, PanelLeft
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -78,9 +78,7 @@ SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Target Inv.,0,
 SF,RM,BAB250-MR1,MYBGPM,FA,KG,MTS,BAB250-MR1/MYBGPM/FA/KG/MTS,Tot.Inventory (Forecast),0,11/19/2025,2500.00
 SF,RM,BAB250-MR1,MYBGPM,FA,KG,MTS,BAB250-MR1/MYBGPM/FA/KG/MTS,Tot.Target Inv.,0,11/19/2025,3000.00
 SF,RM,BAB250-MR1,MYBGPM,FA,KG,MTS,BAB250-MR1/MYBGPM/FA/KG/MTS,Tot.Inventory (Forecast),0,11/20/2025,2400.00
-SF,RM,BAB250-MR1,MYBGPM,FA,KG,MTS,BAB250-MR1/MYBGPM/FA/KG/MTS,Tot.Target Inv.,0,11/20/2025,3000.00
-NR,FG,AAG620-MR2,IDCKDM,MR,LM,MTS,AAG620-MR2/IDCKDM/MR/LM/MTS,Tot.Inventory (Forecast),0,11/19/2025,1000.00
-NR,FG,AAG620-MR2,IDCKDM,MR,LM,MTS,AAG620-MR2/IDCKDM/MR/LM/MTS,Tot.Target Inv.,0,11/19/2025,2000.00`;
+SF,RM,BAB250-MR1,MYBGPM,FA,KG,MTS,BAB250-MR1/MYBGPM/FA/KG/MTS,Tot.Target Inv.,0,11/20/2025,3000.00`;
 
 const DEFAULT_BOM = [
     { parent: 'AAG620-MR2', child: 'BAB250-MR1', ratio: 0.5, plant: 'MYBGPM' }, 
@@ -89,14 +87,14 @@ const DEFAULT_BOM = [
 const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-white/95 backdrop-blur-sm p-4 rounded-xl shadow-xl border border-slate-100 text-sm">
-                <p className="font-semibold text-slate-800 mb-2">{new Date(label).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</p>
-                <div className="space-y-1">
+            <div className="bg-white/95 backdrop-blur-sm p-3 rounded-xl shadow-xl border border-slate-100 text-xs z-50">
+                <p className="font-semibold text-slate-800 mb-1">{new Date(label).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</p>
+                <div className="space-y-0.5">
                     {payload.map((entry, index) => (
-                        <div key={index} className="flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.fill }} />
-                                <span className="text-slate-500 text-xs">{entry.name}</span>
+                        <div key={index} className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: entry.color || entry.fill }} />
+                                <span className="text-slate-500 text-[10px]">{entry.name}</span>
                             </div>
                             <span className="font-mono font-medium text-slate-700">
                                 {typeof entry.value === 'number' ? entry.value.toLocaleString(undefined, { maximumFractionDigits: 0 }) : entry.value}
@@ -158,29 +156,29 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false }) =>
 
     return (
         <div className="relative group" ref={wrapperRef}>
-            <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">{label}</label>
+            <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">{label}</label>
             <button
-                className={`w-full bg-white rounded-xl border px-4 py-2.5 text-sm flex items-center justify-between cursor-pointer transition-all duration-200 ease-in-out
-                    ${isOpen ? 'border-indigo-500 ring-2 ring-indigo-100 shadow-md' : 'border-slate-200 hover:border-indigo-300 hover:shadow-sm'}`}
+                className={`w-full bg-white rounded-lg border px-3 py-2 text-xs flex items-center justify-between cursor-pointer transition-all duration-200 ease-in-out
+                    ${isOpen ? 'border-indigo-500 ring-1 ring-indigo-100 shadow-sm' : 'border-slate-200 hover:border-indigo-300'}`}
                 onClick={() => {
                     if (!isOpen) setSearchTerm("");
                     setIsOpen(!isOpen);
                 }}
             >
-                <span className={`truncate block max-w-[180px] text-left font-medium ${value === 'All' || (multi && value.includes('All')) ? 'text-slate-500' : 'text-slate-800'}`}>
+                <span className={`truncate block max-w-[140px] text-left font-medium ${value === 'All' || (multi && value.includes('All')) ? 'text-slate-500' : 'text-slate-800'}`}>
                     {getDisplayText()}
                 </span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isOpen && (
-                <div className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-2xl border border-slate-100 max-h-64 flex flex-col animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+                <div className="absolute z-50 w-full mt-1 bg-white rounded-xl shadow-2xl border border-slate-100 max-h-60 flex flex-col animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
                     <div className="p-2 border-b border-slate-50 bg-slate-50/50">
                         <div className="relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-slate-400" />
                             <input
                                 type="text"
-                                className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white"
+                                className="w-full pl-7 pr-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white"
                                 placeholder="Search..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -195,7 +193,7 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false }) =>
                             filteredOptions.map(opt => (
                                 <div
                                     key={opt}
-                                    className={`px-4 py-2.5 text-sm cursor-pointer flex items-center justify-between transition-colors
+                                    className={`px-3 py-2 text-xs cursor-pointer flex items-center justify-between transition-colors
                                         ${value === opt || (multi && value.includes(opt)) 
                                             ? 'bg-indigo-50/80 text-indigo-700 font-medium' 
                                             : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'}`}
@@ -212,13 +210,13 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false }) =>
                                     <span className="truncate">{opt}</span>
                                     {multi && (
                                         (value.includes(opt))
-                                            ? <CheckSquare className="w-4 h-4 text-indigo-600" />
-                                            : <Square className="w-4 h-4 text-slate-300" />
+                                            ? <CheckSquare className="w-3 h-3 text-indigo-600" />
+                                            : <Square className="w-3 h-3 text-slate-300" />
                                     )}
                                 </div>
                             ))
                         ) : (
-                            <div className="px-4 py-3 text-sm text-slate-400 text-center italic">No results</div>
+                            <div className="px-3 py-2 text-xs text-slate-400 text-center italic">No results</div>
                         )}
                     </div>
                 </div>
@@ -227,20 +225,20 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false }) =>
     );
 };
 
-// --- Weekly Health Indicator ---
+// --- Weekly Health Indicator Component ---
 const WeeklyHealthIndicator = React.memo(({ data }) => {
-    if (!data || data.length === 0) return <div className="text-[10px] text-slate-400 mt-2">No forecast data</div>;
+    if (!data || data.length === 0) return <div className="text-[9px] text-slate-400 mt-1">No forecast data</div>;
 
     return (
-        <div className="flex items-center gap-1 mt-2">
+        <div className="flex items-center gap-0.5 mt-1.5">
             {data.map((w, idx) => {
                 let colorClass = 'bg-slate-200';
-                if (w.pct >= 100) colorClass = 'bg-emerald-500';
+                if (w.pct >= 100) colorClass = 'bg-emerald-400';
                 else if (w.pct > 0) colorClass = 'bg-amber-400';
-                else colorClass = 'bg-red-500';
+                else colorClass = 'bg-red-400';
                 
                 return (
-                    <div key={idx} className="group relative flex-1 h-2 first:rounded-l-sm last:rounded-r-sm bg-slate-100 overflow-hidden">
+                    <div key={idx} className="group relative flex-1 h-1.5 first:rounded-l-sm last:rounded-r-sm bg-slate-100 overflow-hidden">
                         <div className={`h-full w-full ${colorClass}`} title={`Week ${w.week}: ${w.pct.toFixed(0)}% Target`}></div>
                     </div>
                 );
@@ -249,7 +247,7 @@ const WeeklyHealthIndicator = React.memo(({ data }) => {
     );
 });
 
-// --- Node Card ---
+// --- Node Card Component ---
 const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
     const statusColors = {
         'Critical': 'border-red-200 bg-red-50/50 hover:border-red-300',
@@ -260,17 +258,17 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
     
     return (
         <div 
-            className={`relative flex flex-col p-3 rounded-xl border shadow-sm transition-all cursor-pointer group
-                ${isActive ? 'ring-2 ring-indigo-500 border-transparent shadow-md bg-white' : statusColors[node.status] || statusColors['Neutral']}`}
+            className={`relative flex flex-col p-2.5 rounded-xl border shadow-sm transition-all cursor-pointer group
+                ${isActive ? 'ring-2 ring-indigo-500 border-transparent shadow-md bg-white z-10' : statusColors[node.status] || statusColors['Neutral']}`}
             onClick={onSelect}
         >
             <div className="flex justify-between items-start mb-1">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${isActive ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-white/60 border-black/5 text-slate-500'}`}>
+                    <span className={`text-[9px] font-bold uppercase px-1 py-0.5 rounded border ${isActive ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-white/60 border-black/5 text-slate-500'}`}>
                         {node.type}
                     </span>
                     <div className="flex flex-col min-w-0">
-                         <div className="text-xs font-bold text-slate-800 truncate max-w-[140px]" title={node.id}>{node.id}</div>
+                         <div className="text-xs font-bold text-slate-800 truncate max-w-[120px]" title={node.id}>{node.id}</div>
                          <div className="flex items-center text-[10px] text-slate-400">
                              <MapPin className="w-2.5 h-2.5 mr-0.5" />
                              {node.invOrg}
@@ -282,12 +280,12 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
                     className="p-1 rounded-md hover:bg-white text-slate-400 hover:text-indigo-600 transition-colors z-10 relative"
                     title="View Details"
                 >
-                    <Table className="w-3.5 h-3.5" />
+                    <Table className="w-3 h-3" />
                 </button>
             </div>
             
-            <div className="flex items-baseline justify-between mt-2">
-                <div className="text-[10px] text-slate-500 font-mono">Inv: {node.currentInv?.toLocaleString() || 0}</div>
+            <div className="flex items-baseline justify-between mt-1">
+                <div className="text-[9px] text-slate-500 font-mono">Inv: {node.currentInv?.toLocaleString() || 0}</div>
                 {node.status === 'Critical' && <AlertTriangle className="w-3 h-3 text-red-500" />}
             </div>
 
@@ -299,7 +297,7 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
 
 // --- Render Column Helper ---
 const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSearchTerm, setSort, sortValue, isActiveCol, children }) => (
-    <div className={`flex flex-col h-full border-r border-slate-200 bg-slate-50/30 ${isActiveCol ? 'bg-indigo-50/30' : ''} min-w-[280px] max-w-[320px]`}>
+    <div className={`flex flex-col h-full border-r border-slate-200 bg-slate-50/30 ${isActiveCol ? 'bg-indigo-50/30' : ''} min-w-[280px] flex-1`}>
         <div className="p-3 border-b border-slate-200 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
             <div className="flex items-center justify-between mb-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
@@ -316,14 +314,14 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
                 <input 
                     type="text" 
                     className="w-full pl-7 pr-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 bg-white"
-                    placeholder="Search Item..."
+                    placeholder="Search..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
             </div>
             {children}
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin scrollbar-thumb-slate-200">
+        <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-slate-200">
             {items.length > 0 ? items.map(node => (
                 <React.Fragment key={`${node.id}-${node.invOrg}`}>
                    {node.component} 
@@ -332,6 +330,7 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
         </div>
     </div>
 ));
+
 
 // --- Supply Chain Network Map Component ---
 const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRange, onOpenDetails, onNodeSelect }) => {
@@ -355,10 +354,9 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         setMapFocus(null);
         setSearchTermRM(""); setSearchTermFG(""); setSearchTermDC("");
         setRmClassFilter('All'); setFgPlantFilter('All'); setDcFilter('All');
-        onNodeSelect(null); // Clear parent
+        onNodeSelect(null); 
     };
 
-    // Sync parent selection
     useEffect(() => {
         if (selectedItemFromParent) {
             let type = 'FG';
@@ -366,7 +364,6 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
             else if (DC_ORGS.includes(selectedItemFromParent.invOrg)) type = 'DC';
             else type = 'RM'; 
 
-            // Only update if different to prevent loops
             if (!mapFocus || mapFocus.id !== selectedItemFromParent.itemCode) {
                 setMapFocus({ 
                     type: type,
@@ -375,11 +372,11 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
                 });
             }
         }
-    }, [selectedItemFromParent]);
+    }, [selectedItemFromParent, inventoryData]);
 
     // 1. Index Data
     const dataIndex = useMemo(() => {
-        const idx = {}; // Key: "ItemCode|InvOrg"
+        const idx = {}; 
         const rmKeys = new Set();
         const fgKeys = new Set();
         const dcKeys = new Set();
@@ -400,8 +397,8 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
     // 2. Index BOM
     const bomIndex = useMemo(() => {
-        const p2c = {}; // Parent -> Children
-        const c2p = {}; // Child -> Parents
+        const p2c = {}; 
+        const c2p = {}; 
         const parents = new Set();
         const children = new Set();
         
@@ -478,58 +475,44 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         let targetFGKeys = dataIndex.fgKeys;
         let targetDCKeys = dataIndex.dcKeys;
 
-        // ORPHAN RULE: Filter Raw Materials & Plant FGs based on BOM existence
         targetRMKeys = targetRMKeys.filter(k => bomIndex.children.has(k.split('|')[0]));
         targetFGKeys = targetFGKeys.filter(k => bomIndex.parents.has(k.split('|')[0]));
 
-        // --- FILTERING LOGIC ---
         if (mapFocus) {
-            const focusId = mapFocus.id; // Item Code
+            const focusId = mapFocus.id; 
             
             if (mapFocus.type === 'FG') {
-                // Plant FG Selected
-                // 1. Show Ingredients (RM)
                 const ingredients = bomIndex.p2c[focusId];
                 if (ingredients) targetRMKeys = targetRMKeys.filter(k => ingredients.has(k.split('|')[0]));
                 else targetRMKeys = []; 
                 
-                // 2. Show Downstream DC items (Same Item Code)
                 targetDCKeys = targetDCKeys.filter(k => k.split('|')[0] === focusId);
 
             } else if (mapFocus.type === 'RM') {
-                // RM Selected
-                // 1. Show Consumers (Plant FG)
                 const consumers = bomIndex.c2p[focusId];
                 if (consumers) targetFGKeys = targetFGKeys.filter(k => consumers.has(k.split('|')[0]));
                 else targetFGKeys = [];
                 
-                // 2. Filter DCs based on visible FGs
                 const visibleFgCodes = new Set(targetFGKeys.map(k => k.split('|')[0]));
                 targetDCKeys = targetDCKeys.filter(k => visibleFgCodes.has(k.split('|')[0]));
 
             } else if (mapFocus.type === 'DC') {
-                // DC Selected
-                // 1. Show Supplier Plant FGs (Same Item Code)
                 targetFGKeys = targetFGKeys.filter(k => k.split('|')[0] === focusId);
                 
-                // 2. Show Ingredients of those FGs
                 const ingredients = bomIndex.p2c[focusId];
                 if (ingredients) targetRMKeys = targetRMKeys.filter(k => ingredients.has(k.split('|')[0]));
                 else targetRMKeys = [];
             }
         }
 
-        // --- SEARCH ---
         if (searchTermRM) targetRMKeys = targetRMKeys.filter(k => k.toLowerCase().includes(searchTermRM.toLowerCase()));
         if (searchTermFG) targetFGKeys = targetFGKeys.filter(k => k.toLowerCase().includes(searchTermFG.toLowerCase()));
         if (searchTermDC) targetDCKeys = targetDCKeys.filter(k => k.toLowerCase().includes(searchTermDC.toLowerCase()));
 
-        // --- HYDRATE NODES ---
         let rmNodes = targetRMKeys.map(k => getNodeStats(k, 'RM')).filter(Boolean);
         let fgNodes = targetFGKeys.map(k => getNodeStats(k, 'FG')).filter(Boolean);
         let dcNodes = targetDCKeys.map(k => getNodeStats(k, 'DC')).filter(Boolean);
 
-        // --- CATEGORY FILTERS ---
         if (rmClassFilter !== 'All') {
             rmNodes = rmNodes.filter(n => n.itemClass && n.itemClass.includes(rmClassFilter));
         }
@@ -540,7 +523,6 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
             dcNodes = dcNodes.filter(n => n.invOrg === dcFilter);
         }
 
-        // --- SORT ---
         const sorter = (a, b, method) => {
             if (method === 'alpha') return a.id.localeCompare(b.id);
             if (method === 'invDesc') return b.currentInv - a.currentInv;
@@ -550,7 +532,6 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         fgNodes.sort((a, b) => sorter(a, b, sortFG));
         dcNodes.sort((a, b) => sorter(a, b, sortDC));
 
-        // --- WRAP ---
         const wrapNode = (n) => ({
             id: n.id, 
             invOrg: n.invOrg,
@@ -561,7 +542,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
                     isActive={mapFocus && mapFocus.id === n.id && mapFocus.invOrg === n.invOrg}
                     onSelect={() => {
                         setMapFocus(n);
-                        onNodeSelect(n); // Trigger graph update
+                        onNodeSelect(n); 
                     }}
                     onOpenDetail={onOpenDetails}
                 />
@@ -577,15 +558,15 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
     }, [dataIndex, bomIndex, mapFocus, searchTermRM, searchTermFG, searchTermDC, sortRM, sortFG, sortDC, dateRange, getNodeStats, onOpenDetails, rmClassFilter, fgPlantFilter, dcFilter, onNodeSelect]);
 
     return (
-        <div className="flex h-[500px] overflow-hidden bg-white rounded-xl border border-slate-200 shadow-inner relative">
+        <div className="flex h-[600px] overflow-hidden bg-white rounded-xl border border-slate-200 shadow-inner relative">
             
-            {/* Reset Map Button (Absolute Top Right) */}
-            <div className="absolute top-2 right-2 z-20">
+            {/* Reset Map Button */}
+            <div className="absolute top-3 right-3 z-30">
                 <button 
                     onClick={handleReset}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-white/90 backdrop-blur text-xs font-medium text-slate-600 border border-slate-200 rounded-lg shadow-sm hover:text-indigo-600 hover:border-indigo-300 transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 backdrop-blur text-xs font-medium text-slate-600 border border-slate-300 rounded-lg shadow-sm hover:text-indigo-600 hover:border-indigo-300 hover:shadow transition-all"
                 >
-                    <RotateCcw className="w-3 h-3" /> Reset Map
+                    <RotateCcw className="w-3.5 h-3.5" /> Reset
                 </button>
             </div>
 
@@ -689,7 +670,6 @@ export default function SupplyChainDashboard() {
         metric: ['All']
     });
     const [isLeadTimeMode, setIsLeadTimeMode] = useState(false);
-    // VIEW MODE REMOVED - Now Single View
     const [selectedItem, setSelectedItem] = useState(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [hoveredDate, setHoveredDate] = useState(null);
@@ -722,7 +702,6 @@ export default function SupplyChainDashboard() {
         }
     };
 
-    // --- Fetch from Google Sheets ---
     useEffect(() => {
         const fetchData = async () => {
             if (!GOOGLE_SHEET_CONFIG.INVENTORY_URL || !GOOGLE_SHEET_CONFIG.BOM_URL) {
@@ -753,7 +732,6 @@ export default function SupplyChainDashboard() {
 
                 handleDataLoad(invData);
                 setBomData(processedBom);
-                console.log("Loaded from Google Sheets");
 
             } catch (error) {
                 console.error("Failed to load Google Sheets", error);
@@ -875,7 +853,6 @@ export default function SupplyChainDashboard() {
         });
         return Object.values(grouped).sort((a, b) => a._dateObj - b._dateObj);
     }, [filteredData, filters.metric, selectedItem, rawData, dateRange]);
-
 
     // --- Gantt Data Logic ---
     const ganttData = useMemo(() => {
@@ -1037,7 +1014,7 @@ export default function SupplyChainDashboard() {
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20 selection:bg-indigo-100 selection:text-indigo-800">
              <header className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-40 transition-all duration-300">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                     <div className="flex items-center space-x-3">
                         <div className="bg-indigo-600 p-2.5 rounded-xl shadow-lg shadow-indigo-500/20">
                             <Package className="w-5 h-5 text-white" />
@@ -1061,137 +1038,70 @@ export default function SupplyChainDashboard() {
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-                {/* Filters Section */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 md:p-8 transition-shadow hover:shadow-md">
-                    <div className="flex items-center justify-between mb-8">
-                        <div className="flex items-center space-x-3 text-slate-800">
-                            <div className="p-2 bg-blue-50 rounded-lg"><Filter className="w-5 h-5 text-indigo-600" /></div>
-                            <div><h2 className="font-bold text-lg tracking-tight">Global Filters</h2><p className="text-sm text-slate-500">Refine data points across all charts</p></div>
-                        </div>
-                        <button onClick={resetFilters} className="text-sm px-4 py-2 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 font-medium transition-colors">Reset Defaults</button>
-                    </div>
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8 pb-8 border-b border-slate-100">
-                         <div className="lg:col-span-3 flex flex-col justify-end">
-                            <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Analysis Mode</label>
-                            <button onClick={() => setIsLeadTimeMode(!isLeadTimeMode)} className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl border transition-all duration-200 ${isLeadTimeMode ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-                                <span className="text-sm font-medium flex items-center"><Clock className={`w-4 h-4 mr-2.5 ${isLeadTimeMode ? 'text-indigo-600' : 'text-slate-400'}`} />Inside Lead Time ONLY</span>
-                                {isLeadTimeMode ? <ToggleRight className="w-6 h-6 text-indigo-600" /> : <ToggleLeft className="w-6 h-6 text-slate-300" />}
-                            </button>
-                        </div>
-                        <div className="lg:col-span-3">
-                            <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Start Date</label>
-                            <input type="date" disabled={isLeadTimeMode} className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white" value={dateRange.start} onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))} />
-                        </div>
-                        <div className="lg:col-span-3">
-                            <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">End Date</label>
-                            <input type="date" disabled={isLeadTimeMode} className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white" value={dateRange.end} onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))} />
-                        </div>
-                        <div className="lg:col-span-3">
-                            <SearchableSelect label="Displayed Metrics" value={filters.metric} options={options.metrics} onChange={(val) => setFilters(prev => ({ ...prev, metric: val }))} multi={true} />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-                        <SearchableSelect label="Item Code" value={filters.itemCode} options={options.itemCodes} onChange={(val) => setFilters(prev => ({ ...prev, itemCode: val }))} />
-                        <SearchableSelect label="Inv Org" value={filters.invOrg} options={options.invOrgs} onChange={(val) => setFilters(prev => ({ ...prev, invOrg: val }))} />
-                        <SearchableSelect label="Item Class" value={filters.itemClass} options={options.itemClasses} onChange={(val) => setFilters(prev => ({ ...prev, itemClass: val }))} />
-                        <SearchableSelect label="UOM" value={filters.uom} options={options.uoms} onChange={(val) => setFilters(prev => ({ ...prev, uom: val }))} />
-                        <SearchableSelect label="Strategy" value={filters.strategy} options={options.strategies} onChange={(val) => setFilters(prev => ({ ...prev, strategy: val }))} />
+            <div className="flex min-h-screen max-w-[1800px] mx-auto">
+                {/* --- LEFT SIDEBAR PLACEHOLDER (10%) --- */}
+                <div className="hidden xl:block w-[5%] 2xl:w-[10%] border-r border-slate-200 bg-slate-50/50">
+                    <div className="h-full w-full flex items-center justify-center text-slate-300">
+                        <PanelLeft className="w-6 h-6 opacity-20" />
                     </div>
                 </div>
 
-                {/* --- DASHBOARD LAYOUT: MAP (Left) + CHART (Right) --- */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* LEFT: Supply Chain Network Map */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 relative overflow-hidden h-[550px]">
-                        <div className="flex items-center justify-between mb-4">
-                             <div className="flex items-center space-x-3">
+                {/* --- CENTER MAIN CONTENT (70%) --- */}
+                <main className="flex-1 flex flex-col p-6 gap-6 min-w-0 overflow-hidden">
+                    {/* SUPPLY CHAIN MAP (Main Stage) */}
+                    <div className="flex-1 min-h-[500px] bg-white rounded-2xl shadow-sm border border-slate-200/60 p-0 overflow-hidden flex flex-col">
+                        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                            <div className="flex items-center space-x-3">
                                 <div className="p-2 rounded-lg bg-blue-50 text-blue-600"><Network className="w-5 h-5" /></div>
-                                <div><h2 className="text-lg font-bold text-slate-900 tracking-tight">Network Map</h2><p className="text-xs text-slate-500">Material Flow</p></div>
+                                <div><h2 className="text-lg font-bold text-slate-900 tracking-tight">Supply Chain Network</h2><p className="text-xs text-slate-500">Live Inventory Map</p></div>
                             </div>
                         </div>
-                        <SupplyChainMap 
-                            selectedItemFromParent={selectedItem} 
-                            bomData={bomData} 
-                            inventoryData={rawData} 
-                            dateRange={dateRange} 
-                            onOpenDetails={(node) => {
-                                setSelectedItem({ itemCode: node.id, invOrg: node.invOrg, type: node.type });
-                                setIsDetailOpen(true);
-                            }}
-                            onNodeSelect={(node) => {
-                                if (node) setSelectedItem({ itemCode: node.id, invOrg: node.invOrg, type: node.type });
-                                else setSelectedItem(null);
-                            }}
-                        />
+                        <div className="flex-1 relative">
+                             <SupplyChainMap 
+                                selectedItemFromParent={selectedItem} 
+                                bomData={bomData} 
+                                inventoryData={rawData} 
+                                dateRange={dateRange} 
+                                onOpenDetails={(node) => {
+                                    setSelectedItem({ itemCode: node.id, invOrg: node.invOrg, type: node.type });
+                                    setIsDetailOpen(true);
+                                }}
+                                onNodeSelect={(node) => {
+                                    if (node) setSelectedItem({ itemCode: node.id, invOrg: node.invOrg, type: node.type });
+                                    else setSelectedItem(null);
+                                }}
+                            />
+                        </div>
                     </div>
 
-                    {/* RIGHT: Trend Chart */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 relative overflow-hidden h-[550px]">
-                        <div className="flex items-center justify-between mb-4">
+                    {/* RISK MONITOR (Bottom) */}
+                    <div className="h-[400px] bg-white rounded-2xl shadow-sm border border-slate-200/60 flex flex-col overflow-hidden">
+                        <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
                             <div className="flex items-center space-x-3">
-                                <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600"><Activity className="w-5 h-5" /></div>
-                                <div>
-                                    <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-                                        {selectedItem ? `Trend: ${selectedItem.itemCode}` : "Aggregate Trends"}
-                                    </h2>
-                                    {selectedItem && <p className="text-xs text-slate-500">{selectedItem.invOrg}</p>}
+                                <div className="p-2 bg-amber-50 rounded-lg"><AlertTriangle className="w-5 h-5 text-amber-600" /></div>
+                                <div><h2 className="text-lg font-bold text-slate-900 tracking-tight">Risk Monitor</h2><p className="text-xs text-slate-500">Timeline of projected shortages</p></div>
+                            </div>
+                            {/* Minified Risk Controls */}
+                            <div className="flex items-center gap-4">
+                                 <div className="flex items-center space-x-2 border-r border-slate-200 pr-4">
+                                    <label className="text-[10px] font-bold uppercase text-slate-400">Sort</label>
+                                    <select className="text-xs border-none focus:ring-0 text-slate-600 font-medium bg-transparent cursor-pointer" value={ganttSort} onChange={(e) => setGanttSort(e.target.value)}>
+                                        <option value="itemCode">Name</option>
+                                        <option value="leadTime">Lead Time</option>
+                                        <option value="duration">Duration</option>
+                                    </select>
+                                </div>
+                                <div className="flex items-center space-x-3 text-xs font-medium text-slate-600">
+                                    <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={riskFilters.critical} onChange={e => setRiskFilters(p => ({...p, critical: e.target.checked}))} className="rounded text-red-500 focus:ring-red-500 border-slate-300" />Critical</label>
+                                    <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={riskFilters.watchOut} onChange={e => setRiskFilters(p => ({...p, watchOut: e.target.checked}))} className="rounded text-amber-400 focus:ring-amber-400 border-slate-300" />Watch Out</label>
                                 </div>
                             </div>
                         </div>
-                        <div className="h-[450px] w-full">
-                             {chartData.length > 0 ? (
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} onMouseMove={(e) => e && e.activeLabel && setHoveredDate(e.activeLabel)} onMouseLeave={() => setHoveredDate(null)}>
-                                        <defs>{colors.map((color, index) => (<linearGradient key={index} id={`color${index}`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={color} stopOpacity={0.3}/><stop offset="95%" stopColor={color} stopOpacity={0}/></linearGradient>))}</defs>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                        <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} tickMargin={15} tickLine={false} axisLine={false} tickFormatter={(str) => `${new Date(str).getMonth() + 1}/${new Date(str).getDate()}`} />
-                                        <YAxis stroke="#94a3b8" fontSize={12} width={60} tickLine={false} axisLine={false} tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value} />
-                                        <Tooltip content={<CustomTooltip />} />
-                                        <Legend iconType="circle" wrapperStyle={{paddingTop: '20px'}}/>
-                                        {activeMetrics.map((metric, index) => (
-                                            <Area key={metric} type="monotone" dataKey={metric} stroke={colors[index % colors.length]} fill={`url(#color${index % colors.length})`} fillOpacity={1} strokeWidth={2} activeDot={{ r: 6, strokeWidth: 0 }} />
-                                        ))}
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            ) : <EmptyState msg="No trend data available" />}
-                        </div>
-                    </div>
-                </div>
-
-                {/* BOTTOM: Risk Monitor (Gantt) */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 flex flex-col overflow-hidden">
-                    <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
-                        <div className="flex items-center space-x-3">
-                            <div className="p-2 bg-amber-50 rounded-lg"><AlertTriangle className="w-5 h-5 text-amber-600" /></div>
-                            <div><h2 className="text-lg font-bold text-slate-900 tracking-tight">Risk Monitor</h2><p className="text-sm text-slate-500">Timeline of projected shortages</p></div>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-4 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
-                             <div className="flex items-center space-x-2 border-r border-slate-100 pr-4 pl-2">
-                                <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
-                                <select className="text-sm border-none focus:ring-0 text-slate-600 font-medium cursor-pointer bg-transparent py-1 pr-8" value={ganttSort} onChange={(e) => setGanttSort(e.target.value)}>
-                                    <option value="itemCode">Sort by Name</option>
-                                    <option value="leadTime">Inside Lead Time First</option>
-                                    <option value="duration">Shortage Duration</option>
-                                    <option value="planning">Planning Priority</option>
-                                </select>
-                            </div>
-                            <div className="flex items-center space-x-2 border-r border-slate-100 pr-4">
-                                <label className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Min Days</label>
-                                <input type="number" min="1" className="w-14 px-2 py-1 text-sm border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 text-center font-medium" value={riskFilters.minDays} onChange={(e) => setRiskFilters(p => ({...p, minDays: parseInt(e.target.value) || 1}))} />
-                            </div>
-                            <div className="flex items-center space-x-4 px-2">
-                                <label className="flex items-center space-x-2 cursor-pointer group"><input type="checkbox" checked={riskFilters.critical} onChange={e => setRiskFilters(p => ({...p, critical: e.target.checked}))} className="rounded text-red-500 focus:ring-red-500 border-slate-300" /><span className="text-sm text-slate-600 group-hover:text-slate-900 font-medium transition-colors">Critical</span></label>
-                                <label className="flex items-center space-x-2 cursor-pointer group"><input type="checkbox" checked={riskFilters.watchOut} onChange={e => setRiskFilters(p => ({...p, watchOut: e.target.checked}))} className="rounded text-amber-400 focus:ring-amber-400 border-slate-300" /><span className="text-sm text-slate-600 group-hover:text-slate-900 font-medium transition-colors">Watch Out</span></label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col h-[500px] bg-white">
-                        <div className="overflow-y-auto flex-1 relative scrollbar-thin scrollbar-thumb-slate-200">
+                        <div className="flex-1 overflow-y-auto relative scrollbar-thin scrollbar-thumb-slate-200">
+                            {/* Reused Gantt Body Logic from previous iterations for brevity */}
                             {ganttData.length > 0 ? (
                                 ganttData.map((row, idx) => (
-                                    <div key={idx} className={`flex items-center border-b border-slate-50 h-14 group transition-all duration-200 ${selectedItem && selectedItem.itemCode === row.itemCode && selectedItem.invOrg === row.invOrg ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}>
+                                    <div key={idx} className={`flex items-center border-b border-slate-50 h-12 group transition-all duration-200 ${selectedItem && selectedItem.itemCode === row.itemCode && selectedItem.invOrg === row.invOrg ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}>
                                         <div className="flex-shrink-0 px-6 py-2 border-r border-slate-50 truncate cursor-pointer h-full flex flex-col justify-center" style={{ width: Y_AXIS_WIDTH }} onClick={() => setSelectedItem(row)}>
                                             <div className="font-bold text-slate-700 text-sm truncate group-hover:text-indigo-600 transition-colors">{row.itemCode}</div>
                                             <div className="text-xs text-slate-400 font-mono mt-0.5">{row.invOrg}</div>
@@ -1203,24 +1113,83 @@ export default function SupplyChainDashboard() {
                                             {row.blocks.map((block, bIdx) => {
                                                 const style = getGanttStyles(block.start, block.end);
                                                 const isCritical = block.status === 'Critical';
-                                                const colorClass = isCritical ? 'bg-gradient-to-r from-red-500 to-red-600 shadow-red-200' : 'bg-gradient-to-r from-amber-400 to-amber-500 shadow-amber-200';
+                                                const colorClass = isCritical ? 'bg-red-500' : 'bg-amber-400';
                                                 return (
-                                                    <div key={bIdx} className={`absolute h-6 top-4 rounded-full shadow-md cursor-pointer group/bar transition-transform hover:scale-y-110 hover:z-10 ${colorClass} ${isCritical ? 'animate-pulse-slow' : ''}`} style={{...style, minWidth: '12px'}}>
-                                                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover/bar:block bg-slate-900 text-white text-xs rounded-lg py-2 px-3 whitespace-nowrap z-50 shadow-xl">
-                                                            <div className="font-bold flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${isCritical ? 'bg-red-400' : 'bg-amber-400'}`}></div>{block.status}</div>
-                                                            <div className="text-slate-300 mt-1">{block.days} Days Shortage</div>
-                                                            <div className="text-slate-500 text-[10px] mt-1 font-mono pt-1 border-t border-slate-700">{block.start.toLocaleDateString()} - {block.end.toLocaleDateString()}</div>
-                                                        </div>
-                                                    </div>
+                                                    <div key={bIdx} className={`absolute h-4 top-4 rounded-full shadow-sm cursor-pointer hover:scale-y-125 transition-transform ${colorClass}`} style={{...style, minWidth: '8px'}} title={`${block.status}: ${block.days} Days`}></div>
                                                 );
                                             })}
                                         </div>
                                     </div>
                                 ))
-                            ) : <EmptyState msg="No risks match the current filters." />}
+                            ) : <EmptyState msg="No risks match current filters" />}
                         </div>
                     </div>
-                </div>
+                </main>
+
+                {/* --- RIGHT SIDEBAR (20%) --- */}
+                <aside className="w-[300px] 2xl:w-[20%] border-l border-slate-200 bg-white h-screen sticky top-0 overflow-y-auto z-30 shadow-xl flex flex-col">
+                    {/* 1. Trend Graph (Top Priority) */}
+                    <div className="p-4 border-b border-slate-100 bg-slate-50/30">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Activity className="w-4 h-4 text-emerald-600" />
+                            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Trend Analysis</h3>
+                        </div>
+                        <div className="h-48 w-full bg-white rounded-xl border border-slate-200 shadow-sm p-2">
+                             {chartData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={chartData}>
+                                        <defs>{colors.map((color, index) => (<linearGradient key={index} id={`color${index}`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={color} stopOpacity={0.3}/><stop offset="95%" stopColor={color} stopOpacity={0}/></linearGradient>))}</defs>
+                                        <XAxis dataKey="date" hide />
+                                        <YAxis hide />
+                                        <Tooltip content={<CustomTooltip />} />
+                                        {activeMetrics.map((metric, index) => (
+                                            <Area key={metric} type="monotone" dataKey={metric} stroke={colors[index % colors.length]} fill={`url(#color${index % colors.length})`} strokeWidth={2} />
+                                        ))}
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            ) : <div className="h-full flex items-center justify-center text-xs text-slate-400 italic">No data selected</div>}
+                        </div>
+                        <div className="mt-2 text-xs text-center font-medium text-slate-600 truncate">
+                            {selectedItem ? `${selectedItem.itemCode} (${selectedItem.invOrg})` : "Aggregate View"}
+                        </div>
+                    </div>
+
+                    {/* 2. Global Filters (Stacked) */}
+                    <div className="p-4 flex-1 flex flex-col gap-5">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2"><Filter className="w-3 h-3" /> Filters</h3>
+                            <button onClick={resetFilters} className="text-[10px] text-indigo-600 hover:underline font-medium">Reset All</button>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            {/* Stacked Vertical Inputs */}
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Analysis Mode</label>
+                                <button onClick={() => setIsLeadTimeMode(!isLeadTimeMode)} className={`flex items-center justify-between w-full px-3 py-2 rounded-lg border transition-all ${isLeadTimeMode ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'}`}>
+                                    <span className="text-xs font-medium flex items-center"><Clock className="w-3 h-3 mr-2" />Lead Time Only</span>
+                                    {isLeadTimeMode ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4 text-slate-300" />}
+                                </button>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Date Range</label>
+                                <div className="flex flex-col gap-2">
+                                    <input type="date" disabled={isLeadTimeMode} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 bg-white" value={dateRange.start} onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))} />
+                                    <input type="date" disabled={isLeadTimeMode} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 bg-white" value={dateRange.end} onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))} />
+                                </div>
+                            </div>
+
+                            <SearchableSelect label="Item Code" value={filters.itemCode} options={options.itemCodes} onChange={(val) => setFilters(prev => ({ ...prev, itemCode: val }))} />
+                            <SearchableSelect label="Inv Org" value={filters.invOrg} options={options.invOrgs} onChange={(val) => setFilters(prev => ({ ...prev, invOrg: val }))} />
+                            <SearchableSelect label="Item Class" value={filters.itemClass} options={options.itemClasses} onChange={(val) => setFilters(prev => ({ ...prev, itemClass: val }))} />
+                            <SearchableSelect label="Strategy" value={filters.strategy} options={options.strategies} onChange={(val) => setFilters(prev => ({ ...prev, strategy: val }))} />
+                            
+                            <div className="pt-4 border-t border-slate-100">
+                                <SearchableSelect label="Visible Metrics" value={filters.metric} options={options.metrics} onChange={(val) => setFilters(prev => ({ ...prev, metric: val }))} multi={true} />
+                            </div>
+                        </div>
+                    </div>
+                </aside>
 
                 {selectedItem && selectedItemData && isDetailOpen && (
                     <div className="fixed inset-x-0 bottom-0 z-50 bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] transform transition-all duration-300 ease-in-out h-96 flex flex-col animate-in slide-in-from-bottom-10">
