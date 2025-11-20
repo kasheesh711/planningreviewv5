@@ -87,14 +87,14 @@ const DEFAULT_BOM = [
 const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-white/95 backdrop-blur-sm p-3 rounded-xl shadow-xl border border-slate-100 text-xs z-50">
-                <p className="font-semibold text-slate-800 mb-1">{new Date(label).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</p>
-                <div className="space-y-0.5">
+            <div className="bg-white/95 backdrop-blur-sm p-4 rounded-xl shadow-xl border border-slate-100 text-sm">
+                <p className="font-semibold text-slate-800 mb-2">{new Date(label).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</p>
+                <div className="space-y-1">
                     {payload.map((entry, index) => (
-                        <div key={index} className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-1.5">
-                                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: entry.color || entry.fill }} />
-                                <span className="text-slate-500 text-[10px]">{entry.name}</span>
+                        <div key={index} className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.fill }} />
+                                <span className="text-slate-500 text-xs">{entry.name}</span>
                             </div>
                             <span className="font-mono font-medium text-slate-700">
                                 {typeof entry.value === 'number' ? entry.value.toLocaleString(undefined, { maximumFractionDigits: 0 }) : entry.value}
@@ -225,7 +225,7 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false }) =>
     );
 };
 
-// --- Weekly Health Indicator Component ---
+// --- Weekly Health Indicator ---
 const WeeklyHealthIndicator = React.memo(({ data }) => {
     if (!data || data.length === 0) return <div className="text-[9px] text-slate-400 mt-1">No forecast data</div>;
 
@@ -247,7 +247,7 @@ const WeeklyHealthIndicator = React.memo(({ data }) => {
     );
 });
 
-// --- Node Card Component ---
+// --- Node Card ---
 const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
     const statusColors = {
         'Critical': 'border-red-200 bg-red-50/50 hover:border-red-300',
@@ -268,7 +268,7 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
                         {node.type}
                     </span>
                     <div className="flex flex-col min-w-0">
-                         <div className="text-xs font-bold text-slate-800 truncate max-w-[120px]" title={node.id}>{node.id}</div>
+                         <div className="text-xs font-bold text-slate-800 truncate max-w-[140px]" title={node.id}>{node.id}</div>
                          <div className="flex items-center text-[10px] text-slate-400">
                              <MapPin className="w-2.5 h-2.5 mr-0.5" />
                              {node.invOrg}
@@ -376,7 +376,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
     // 1. Index Data
     const dataIndex = useMemo(() => {
-        const idx = {}; 
+        const idx = {}; // Key: "ItemCode|InvOrg"
         const rmKeys = new Set();
         const fgKeys = new Set();
         const dcKeys = new Set();
@@ -397,8 +397,8 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
     // 2. Index BOM
     const bomIndex = useMemo(() => {
-        const p2c = {}; 
-        const c2p = {}; 
+        const p2c = {}; // Parent -> Children
+        const c2p = {}; // Child -> Parents
         const parents = new Set();
         const children = new Set();
         
@@ -702,6 +702,7 @@ export default function SupplyChainDashboard() {
         }
     };
 
+    // --- Fetch from Google Sheets ---
     useEffect(() => {
         const fetchData = async () => {
             if (!GOOGLE_SHEET_CONFIG.INVENTORY_URL || !GOOGLE_SHEET_CONFIG.BOM_URL) {
@@ -825,8 +826,7 @@ export default function SupplyChainDashboard() {
         });
     }, [rawData, filters, dateRange]);
 
-    // --- CHART DATA ---
-    const chartData = useMemo(() => {
+    const riskChartData = useMemo(() => {
         let sourceData = filteredData;
         if (selectedItem) {
             sourceData = rawData.filter(d => 
@@ -843,18 +843,13 @@ export default function SupplyChainDashboard() {
         );
 
         chartFiltered.forEach(item => {
-            if (!grouped[item.Date]) {
-                grouped[item.Date] = { date: item.Date, _dateObj: item._dateObj };
-            }
-            if (!grouped[item.Date][item.Metric]) {
-                grouped[item.Date][item.Metric] = 0;
-            }
+            if (!grouped[item.Date]) grouped[item.Date] = { date: item.Date, _dateObj: item._dateObj };
+            if (!grouped[item.Date][item.Metric]) grouped[item.Date][item.Metric] = 0;
             grouped[item.Date][item.Metric] += (item.Value || 0);
         });
         return Object.values(grouped).sort((a, b) => a._dateObj - b._dateObj);
     }, [filteredData, filters.metric, selectedItem, rawData, dateRange]);
 
-    // --- Gantt Data Logic ---
     const ganttData = useMemo(() => {
         const grouped = {};
         const today = new Date();
@@ -1098,7 +1093,6 @@ export default function SupplyChainDashboard() {
                             </div>
                         </div>
                         <div className="flex-1 overflow-y-auto relative scrollbar-thin scrollbar-thumb-slate-200">
-                            {/* Reused Gantt Body Logic from previous iterations for brevity */}
                             {ganttData.length > 0 ? (
                                 ganttData.map((row, idx) => (
                                     <div key={idx} className={`flex items-center border-b border-slate-50 h-12 group transition-all duration-200 ${selectedItem && selectedItem.itemCode === row.itemCode && selectedItem.invOrg === row.invOrg ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}>
@@ -1230,7 +1224,7 @@ export default function SupplyChainDashboard() {
                         </div>
                     </div>
                 )}
-            </main>
+            </div>
             <style jsx global>{`@keyframes pulse-slow { 0%, 100% { opacity: 1; } 50% { opacity: .85; } } .animate-pulse-slow { animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }`}</style>
         </div>
     );
