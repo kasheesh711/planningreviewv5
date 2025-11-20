@@ -86,7 +86,7 @@ const DEFAULT_BOM = [
 const CustomTooltip = ({ active, payload, label, isDarkMode }) => {
     if (active && payload && payload.length) {
         return (
-            <div className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white/95 border-slate-100 text-slate-700'} backdrop-blur-md p-3 rounded-xl shadow-2xl border text-xs z-50`}>
+            <div className={`${isDarkMode ? 'bg-slate-950/90 border-slate-900 text-slate-100' : 'bg-white/95 border-slate-100 text-slate-700'} backdrop-blur-md p-3 rounded-xl shadow-2xl border text-xs z-50`}>
                 <p className={`font-bold mb-2 ${isDarkMode ? 'text-slate-100' : 'text-slate-800'}`}>{new Date(label).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</p>
                 <div className="space-y-1">
                     {payload.map((entry, index) => (
@@ -152,10 +152,10 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false, isDa
             <label className={`block text-[10px] font-bold mb-1 uppercase tracking-wider ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{label}</label>
             <button
                 className={`w-full rounded-lg border px-3 py-2 text-xs flex items-center justify-between cursor-pointer transition-all duration-200 ease-in-out
-                    ${isOpen 
-                        ? 'border-indigo-500 ring-1 ring-indigo-500/20 shadow-md' 
-                        : isDarkMode 
-                            ? 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600' 
+                    ${isOpen
+                        ? 'border-indigo-500 ring-1 ring-indigo-500/20 shadow-md'
+                        : isDarkMode
+                            ? 'bg-slate-950/70 border-slate-800 text-slate-200 hover:border-slate-600'
                             : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-300 hover:shadow-sm'}`}
                 onClick={() => { if (!isOpen) setSearchTerm(""); setIsOpen(!isOpen); }}
             >
@@ -164,13 +164,13 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false, isDa
             </button>
 
             {isOpen && (
-                <div className={`absolute z-50 w-full mt-1 rounded-xl shadow-2xl border max-h-60 flex flex-col animate-in fade-in zoom-in-95 duration-150 overflow-hidden ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-                    <div className={`p-2 border-b ${isDarkMode ? 'border-slate-700 bg-slate-900/50' : 'border-slate-50 bg-slate-50/50'}`}>
+                <div className={`absolute z-50 w-full mt-1 rounded-xl shadow-2xl border max-h-60 flex flex-col animate-in fade-in zoom-in-95 duration-150 overflow-hidden ${isDarkMode ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-100'}`}>
+                    <div className={`p-2 border-b ${isDarkMode ? 'border-slate-900 bg-slate-950/80' : 'border-slate-50 bg-slate-50/50'}`}>
                         <div className="relative">
                             <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 opacity-50" />
                             <input
                                 type="text"
-                                className={`w-full pl-7 pr-2 py-1.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 ${isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
+                                className={`w-full pl-7 pr-2 py-1.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 ${isDarkMode ? 'bg-slate-950 border-slate-900 text-slate-100' : 'bg-white border-slate-200 text-slate-700'}`}
                                 placeholder="Search..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -235,12 +235,12 @@ const WeeklyHealthIndicator = React.memo(({ data, isDarkMode }) => {
 
 // --- Node Card ---
 const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail, isDarkMode }) => {
-    const baseClasses = isDarkMode 
-        ? "bg-slate-800/50 border-slate-700 hover:bg-slate-800 hover:border-slate-600" 
+    const baseClasses = isDarkMode
+        ? "bg-slate-900/60 border-slate-800 hover:bg-slate-900 hover:border-slate-700"
         : "bg-white border-slate-200 hover:border-indigo-200 hover:shadow-md";
-    
+
     const activeClasses = isDarkMode
-        ? "ring-1 ring-indigo-500 bg-indigo-900/20 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.15)]"
+        ? "ring-1 ring-indigo-500 bg-indigo-950/30 border-indigo-500/60 shadow-[0_10px_30px_rgba(0,0,0,0.45)]"
         : "ring-2 ring-indigo-500 border-transparent shadow-lg";
 
     return (
@@ -252,7 +252,7 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail, isDarkMod
             <div className="flex justify-between items-start mb-1.5">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                     <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border 
-                        ${isActive ? 'bg-indigo-500 text-white border-transparent' : isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
+                        ${isActive ? 'bg-indigo-500 text-white border-transparent' : isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
                         {node.type}
                     </span>
                     <div className="flex flex-col min-w-0">
@@ -286,8 +286,8 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail, isDarkMod
 
 // --- Render Column Helper ---
 const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSearchTerm, setSort, sortValue, isActiveCol, isDarkMode, children }) => (
-    <div className={`flex flex-col h-full border-r ${isDarkMode ? 'border-slate-800 bg-slate-900/20' : 'border-slate-200/60 bg-slate-50/30'} ${isActiveCol ? (isDarkMode ? 'bg-indigo-900/10' : 'bg-indigo-50/30') : ''} min-w-[300px] flex-1`}>
-        <div className={`p-4 border-b backdrop-blur-sm sticky top-0 z-10 ${isDarkMode ? 'border-slate-800 bg-slate-900/80' : 'border-slate-200/60 bg-white/80'}`}>
+    <div className={`flex flex-col h-full border-r ${isDarkMode ? 'border-slate-900 bg-slate-950/30' : 'border-slate-200/60 bg-slate-50/30'} ${isActiveCol ? (isDarkMode ? 'bg-indigo-900/20' : 'bg-indigo-50/50') : ''} min-w-[300px] flex-1`}>
+        <div className={`p-4 border-b backdrop-blur-sm sticky top-0 z-10 ${isDarkMode ? 'border-slate-900 bg-slate-950/80' : 'border-slate-200/60 bg-white/80'}`}>
             <div className="flex items-center justify-between mb-3">
                 <h3 className={`text-xs font-bold uppercase tracking-widest flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                     {type === 'RM' ? <Box className="w-3.5 h-3.5" /> : (type === 'FG' ? <Factory className="w-3.5 h-3.5" /> : <Warehouse className="w-3.5 h-3.5" />)}
@@ -301,10 +301,10 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
             </div>
             <div className="relative mb-3">
                 <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 opacity-40" />
-                <input 
-                    type="text" 
+                    <input
+                    type="text"
                     className={`w-full pl-8 pr-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors
-                        ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-200 placeholder-slate-600' : 'bg-white border-slate-200 text-slate-700 placeholder-slate-400'}`}
+                        ${isDarkMode ? 'bg-slate-950/80 border-slate-800 text-slate-200 placeholder-slate-600' : 'bg-white border-slate-200 text-slate-700 placeholder-slate-400'}`}
                     placeholder="Filter items..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -561,7 +561,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
             <div className="absolute top-3 right-3 z-30">
                 <button 
                     onClick={handleReset}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border rounded-lg shadow-sm transition-all ${isDarkMode ? 'bg-slate-800/90 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white/95 border-slate-300 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border rounded-lg shadow-sm transition-all ${isDarkMode ? 'bg-slate-950/80 border-slate-900 text-slate-200 hover:bg-slate-900' : 'bg-white/95 border-slate-300 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'}`}
                 >
                     <RotateCcw className="w-3.5 h-3.5" /> Reset
                 </button>
@@ -586,9 +586,9 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
                             key={cls}
                             onClick={() => setRmClassFilter(cls)}
                             className={`text-[9px] font-bold px-2.5 py-1 rounded-full border transition-all whitespace-nowrap uppercase tracking-wide
-                                ${rmClassFilter === cls 
-                                    ? 'bg-indigo-500 border-indigo-500 text-white shadow-md shadow-indigo-500/30' 
-                                    : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'}`}
+                                ${rmClassFilter === cls
+                                    ? 'bg-indigo-500 border-indigo-500 text-white shadow-md shadow-indigo-500/30'
+                                    : isDarkMode ? 'bg-slate-950/60 border-slate-900 text-slate-300 hover:border-slate-700' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'}`}
                         >
                             {cls}
                         </button>
@@ -615,9 +615,9 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
                             key={org}
                             onClick={() => setFgPlantFilter(org)}
                             className={`text-[9px] font-bold px-2.5 py-1 rounded-full border transition-all whitespace-nowrap uppercase tracking-wide
-                                ${fgPlantFilter === org 
-                                    ? 'bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/30' 
-                                    : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'}`}
+                                ${fgPlantFilter === org
+                                    ? 'bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/30'
+                                    : isDarkMode ? 'bg-slate-950/60 border-slate-900 text-slate-300 hover:border-slate-700' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'}`}
                         >
                             {org}
                         </button>
@@ -644,9 +644,9 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
                             key={org}
                             onClick={() => setDcFilter(org)}
                             className={`text-[9px] font-bold px-2.5 py-1 rounded-full border transition-all whitespace-nowrap uppercase tracking-wide
-                                ${dcFilter === org 
-                                    ? 'bg-blue-500 border-blue-500 text-white shadow-md shadow-blue-500/30' 
-                                    : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'}`}
+                                ${dcFilter === org
+                                    ? 'bg-blue-500 border-blue-500 text-white shadow-md shadow-blue-500/30'
+                                    : isDarkMode ? 'bg-slate-950/60 border-slate-900 text-slate-300 hover:border-slate-700' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'}`}
                         >
                             {org}
                         </button>
@@ -1025,9 +1025,9 @@ export default function SupplyChainDashboard() {
     const Y_AXIS_WIDTH = 200; 
 
     return (
-        <div className={`min-h-screen pb-20 transition-colors duration-300 ${isDarkMode ? 'bg-slate-950 text-slate-200' : 'bg-slate-50 text-slate-900'}`}>
+        <div className={`min-h-screen pb-20 transition-colors duration-500 ${isDarkMode ? 'bg-[#05060f] text-slate-100' : 'bg-gradient-to-br from-slate-50 via-white to-slate-100 text-slate-900'}`}>
              {/* HEADER */}
-             <header className={`sticky top-0 z-40 backdrop-blur-md border-b transition-colors duration-300 ${isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white/80 border-slate-200/60'}`}>
+             <header className={`sticky top-0 z-40 backdrop-blur-md border-b transition-colors duration-500 ${isDarkMode ? 'bg-slate-950/80 border-slate-900' : 'bg-white/80 border-slate-200/60'}`}>
                 <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                     <div className="flex items-center space-x-3">
                         <div className="bg-indigo-600 p-2 rounded-xl shadow-lg shadow-indigo-500/20">
@@ -1040,18 +1040,18 @@ export default function SupplyChainDashboard() {
                     </div>
                     <div className="flex items-center space-x-3">
                         {/* Dark Mode Toggle */}
-                        <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-xl border transition-all ${isDarkMode ? 'bg-slate-800 border-slate-700 text-yellow-400 hover:text-yellow-300' : 'bg-white border-slate-200 text-slate-400 hover:text-indigo-600'}`}>
+                        <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-xl border transition-all shadow-sm ${isDarkMode ? 'bg-slate-950 border-slate-800 text-amber-300 hover:text-amber-200' : 'bg-white border-slate-200 text-slate-400 hover:text-indigo-600'}`}>
                             {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                         </button>
-                        <div className={`h-6 w-px ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}></div>
+                        <div className={`h-6 w-px ${isDarkMode ? 'bg-slate-800/60' : 'bg-slate-200'}`}></div>
                         
-                        <button onClick={() => window.location.reload()} className={`group flex items-center px-3 py-2 border rounded-xl transition-all text-xs font-medium ${isDarkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'}`} title="Reload Data">
+                        <button onClick={() => window.location.reload()} className={`group flex items-center px-3 py-2 border rounded-xl transition-all text-xs font-medium shadow-sm ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900 text-slate-200' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'}`} title="Reload Data">
                              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
                         </button>
-                        <label className={`group flex items-center px-3 py-2 border rounded-xl cursor-pointer transition-all text-xs font-medium ${isDarkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'}`}>
+                        <label className={`group flex items-center px-3 py-2 border rounded-xl cursor-pointer transition-all text-xs font-medium shadow-sm ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900 text-slate-200' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'}`}>
                             <FileSpreadsheet className="w-3.5 h-3.5 mr-2 text-emerald-500" />Import BOM<input type="file" accept=".csv" onChange={handleBomUpload} className="hidden" />
                         </label>
-                        <label className={`group flex items-center px-3 py-2 border rounded-xl cursor-pointer transition-all text-xs font-medium ${isDarkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'}`}>
+                        <label className={`group flex items-center px-3 py-2 border rounded-xl cursor-pointer transition-all text-xs font-medium shadow-sm ${isDarkMode ? 'bg-slate-950 border-slate-800 hover:bg-slate-900 text-slate-200' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'}`}>
                             <Upload className="w-3.5 h-3.5 mr-2 text-indigo-500" />Import CSV<input type="file" accept=".csv" onChange={handleInventoryUpload} className="hidden" />
                         </label>
                     </div>
@@ -1060,7 +1060,7 @@ export default function SupplyChainDashboard() {
 
             <div className="flex min-h-[calc(100vh-64px)] max-w-[1800px] mx-auto">
                 {/* --- LEFT SIDEBAR PLACEHOLDER (10%) --- */}
-                <div className={`hidden xl:block w-[5%] 2xl:w-[10%] border-r ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50/50'}`}>
+                <div className={`hidden xl:block w-[5%] 2xl:w-[10%] border-r ${isDarkMode ? 'border-slate-900 bg-slate-950/40' : 'border-slate-200 bg-slate-50/50'}`}>
                     <div className="h-full w-full flex items-center justify-center opacity-10">
                         <PanelLeft className="w-6 h-6" />
                     </div>
@@ -1069,8 +1069,8 @@ export default function SupplyChainDashboard() {
                 {/* --- CENTER MAIN CONTENT (70%) --- */}
                 <main className="flex-1 flex flex-col p-6 gap-6 min-w-0 overflow-hidden">
                     {/* SUPPLY CHAIN MAP (Main Stage) */}
-                    <div className={`flex-1 min-h-[550px] rounded-2xl shadow-sm border p-0 overflow-hidden flex flex-col transition-all duration-300 ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/20' : 'bg-white border-slate-200/60 shadow-slate-200/50'}`}>
-                        <div className={`p-4 border-b flex items-center justify-between ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-slate-50/50'}`}>
+                    <div className={`flex-1 min-h-[550px] rounded-2xl shadow-sm border p-0 overflow-hidden flex flex-col transition-all duration-300 ${isDarkMode ? 'bg-slate-950/80 border-slate-900 shadow-black/30' : 'bg-white border-slate-200/60 shadow-slate-200/50'}`}>
+                        <div className={`p-4 border-b flex items-center justify-between ${isDarkMode ? 'border-slate-900 bg-slate-950/80' : 'border-slate-100 bg-slate-50/50'}`}>
                             <div className="flex items-center space-x-3">
                                 <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500"><Network className="w-5 h-5" /></div>
                                 <div><h2 className={`text-base font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Supply Chain Network</h2><p className="text-xs text-slate-500">Live Inventory Map</p></div>
@@ -1090,15 +1090,15 @@ export default function SupplyChainDashboard() {
                     </div>
 
                     {/* RISK MONITOR (Bottom) */}
-                    <div className={`h-[400px] rounded-2xl shadow-sm border flex flex-col overflow-hidden transition-all duration-300 ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/20' : 'bg-white border-slate-200/60 shadow-slate-200/50'}`}>
-                        <div className={`p-4 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-slate-50/50'}`}>
+                    <div className={`h-[400px] rounded-2xl shadow-sm border flex flex-col overflow-hidden transition-all duration-300 ${isDarkMode ? 'bg-slate-950/80 border-slate-900 shadow-black/30' : 'bg-white border-slate-200/60 shadow-slate-200/50'}`}>
+                        <div className={`p-4 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 ${isDarkMode ? 'border-slate-900 bg-slate-950/80' : 'border-slate-100 bg-slate-50/50'}`}>
                             <div className="flex items-center space-x-3">
                                 <div className="p-2 bg-amber-500/10 rounded-lg"><AlertTriangle className="w-5 h-5 text-amber-500" /></div>
                                 <div><h2 className={`text-base font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Risk Monitor</h2><p className="text-xs text-slate-500">Shortage Timeline</p></div>
                             </div>
                             {/* Minified Risk Controls */}
-                            <div className={`flex items-center gap-4 p-1.5 rounded-xl border shadow-sm ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                                 <div className={`flex items-center space-x-2 border-r pr-4 pl-2 ${isDarkMode ? 'border-slate-700' : 'border-slate-100'}`}>
+                            <div className={`flex items-center gap-4 p-1.5 rounded-xl border shadow-sm ${isDarkMode ? 'bg-slate-950/70 border-slate-900' : 'bg-white border-slate-200'}`}>
+                                 <div className={`flex items-center space-x-2 border-r pr-4 pl-2 ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
                                     <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
                                     <select className={`text-xs border-none focus:ring-0 font-medium bg-transparent cursor-pointer ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`} value={ganttSort} onChange={(e) => setGanttSort(e.target.value)}>
                                         <option value="itemCode">Name</option>
@@ -1143,14 +1143,14 @@ export default function SupplyChainDashboard() {
                 </main>
 
                 {/* --- RIGHT SIDEBAR (20%) --- */}
-                <aside className={`w-[300px] 2xl:w-[20%] border-l h-screen sticky top-0 overflow-y-auto z-30 shadow-xl flex flex-col transition-colors duration-300 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                <aside className={`w-[300px] 2xl:w-[20%] border-l h-screen sticky top-0 overflow-y-auto z-30 shadow-xl flex flex-col transition-colors duration-300 ${isDarkMode ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200'}`}>
                     {/* 1. Trend Graph (Top Priority) */}
-                    <div className={`p-5 border-b ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-slate-50/50'}`}>
+                    <div className={`p-5 border-b ${isDarkMode ? 'border-slate-900 bg-slate-950/80' : 'border-slate-100 bg-slate-50/50'}`}>
                         <div className="flex items-center gap-2 mb-4">
                             <Activity className="w-4 h-4 text-emerald-500" />
                             <h3 className={`text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Trend Analysis</h3>
                         </div>
-                        <div className={`h-48 w-full rounded-xl border shadow-sm p-2 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                        <div className={`h-48 w-full rounded-xl border shadow-sm p-2 ${isDarkMode ? 'bg-slate-950/80 border-slate-900' : 'bg-white border-slate-200'}`}>
                              {chartData.length > 0 ? (
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={chartData}>
@@ -1181,7 +1181,7 @@ export default function SupplyChainDashboard() {
                             {/* Stacked Vertical Inputs */}
                             <div>
                                 <label className={`block text-[9px] font-bold uppercase mb-1.5 tracking-wider ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Analysis Mode</label>
-                                <button onClick={() => setIsLeadTimeMode(!isLeadTimeMode)} className={`flex items-center justify-between w-full px-3 py-2 rounded-lg border transition-all ${isLeadTimeMode ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-500' : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-white border-slate-200 text-slate-600'}`}>
+                                <button onClick={() => setIsLeadTimeMode(!isLeadTimeMode)} className={`flex items-center justify-between w-full px-3 py-2 rounded-lg border transition-all ${isLeadTimeMode ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-500' : isDarkMode ? 'bg-slate-950/70 border-slate-900 text-slate-200' : 'bg-white border-slate-200 text-slate-600'}`}>
                                     <span className="text-xs font-medium flex items-center"><Clock className="w-3.5 h-3.5 mr-2" />Lead Time Only</span>
                                     {isLeadTimeMode ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4 opacity-50" />}
                                 </button>
@@ -1190,8 +1190,8 @@ export default function SupplyChainDashboard() {
                             <div>
                                 <label className={`block text-[9px] font-bold uppercase mb-1.5 tracking-wider ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Date Range</label>
                                 <div className="flex flex-col gap-2.5">
-                                    <input type="date" disabled={isLeadTimeMode} className={`w-full px-3 py-2 border rounded-lg text-xs focus:ring-1 focus:ring-indigo-500 outline-none ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`} value={dateRange.start} onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))} />
-                                    <input type="date" disabled={isLeadTimeMode} className={`w-full px-3 py-2 border rounded-lg text-xs focus:ring-1 focus:ring-indigo-500 outline-none ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`} value={dateRange.end} onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))} />
+                                    <input type="date" disabled={isLeadTimeMode} className={`w-full px-3 py-2 border rounded-lg text-xs focus:ring-1 focus:ring-indigo-500 outline-none ${isDarkMode ? 'bg-slate-950/80 border-slate-900 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`} value={dateRange.start} onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))} />
+                                    <input type="date" disabled={isLeadTimeMode} className={`w-full px-3 py-2 border rounded-lg text-xs focus:ring-1 focus:ring-indigo-500 outline-none ${isDarkMode ? 'bg-slate-950/80 border-slate-900 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`} value={dateRange.end} onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))} />
                                 </div>
                             </div>
 
