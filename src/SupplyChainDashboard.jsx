@@ -3,7 +3,7 @@ import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine, ComposedChart
 } from 'recharts';
 import {
-    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, ArrowLeftRight
+    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, ArrowLeftRight, MapPin
 } from 'lucide-react';
 
 // --- Helper for CSV Parsing ---
@@ -238,7 +238,7 @@ const WeeklyHealthIndicator = React.memo(({ data }) => {
     );
 });
 
-// --- Node Card Component ---
+// --- Node Card Component (UPDATED with Plant) ---
 const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
     const statusColors = {
         'Critical': 'border-red-200 bg-red-50/50 hover:border-red-300',
@@ -254,11 +254,18 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
             onClick={onSelect}
         >
             <div className="flex justify-between items-start mb-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
                     <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${isActive ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-white/60 border-black/5 text-slate-500'}`}>
                         {node.type}
                     </span>
-                    <div className="text-xs font-bold text-slate-800 truncate max-w-[120px]" title={node.id}>{node.id}</div>
+                    <div className="flex flex-col min-w-0">
+                         <div className="text-xs font-bold text-slate-800 truncate max-w-[140px]" title={node.id}>{node.id}</div>
+                         {/* Display Plant / Inv Org */}
+                         <div className="flex items-center text-[10px] text-slate-400">
+                             <MapPin className="w-2.5 h-2.5 mr-0.5" />
+                             {node.invOrg}
+                         </div>
+                    </div>
                 </div>
                 <button 
                     onClick={(e) => { e.stopPropagation(); onOpenDetail(node); }}
@@ -269,7 +276,7 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
                 </button>
             </div>
             
-            <div className="flex items-baseline justify-between mt-1">
+            <div className="flex items-baseline justify-between mt-2">
                 <div className="text-[10px] text-slate-500 font-mono">Inv: {node.currentInv?.toLocaleString() || 0}</div>
                 {node.status === 'Critical' && <AlertTriangle className="w-3 h-3 text-red-500" />}
             </div>
@@ -282,7 +289,7 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
     );
 });
 
-// --- Render Column Helper (EXTRACTED) ---
+// --- Render Column Helper ---
 const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSearchTerm, setSort, sortValue, isActiveCol, children }) => (
     <div className={`flex flex-col h-full border-r border-slate-200 bg-slate-50/30 ${isActiveCol ? 'bg-indigo-50/30' : ''} min-w-[280px] max-w-[320px]`}>
         <div className="p-3 border-b border-slate-200 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
@@ -363,17 +370,21 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
     // 2. Index BOM
     const bomIndex = useMemo(() => {
-        const p2c = {}; 
-        const c2p = {}; 
+        const p2c = {}; // Parent -> Children
+        const c2p = {}; // Child -> Parents
+        const parents = new Set();
+        const children = new Set();
         
         bomData.forEach(b => {
             if (!p2c[b.parent]) p2c[b.parent] = new Set();
             p2c[b.parent].add(b.child);
+            parents.add(b.parent);
 
             if (!c2p[b.child]) c2p[b.child] = new Set();
             c2p[b.child].add(b.parent);
+            children.add(b.child);
         });
-        return { p2c, c2p };
+        return { p2c, c2p, parents, children };
     }, [bomData]);
 
     // 3. Get Stats
@@ -430,10 +441,11 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         };
     }, [dataIndex, dateRange]);
 
-    // 4. Generate Lists
+    // 4. Generate Lists (UPDATED ORPHAN FILTERING)
     const { rmList, fgList } = useMemo(() => {
-        let targetRMs = dataIndex.rmIds;
-        let targetFGs = dataIndex.fgIds;
+        // Filter 1: Must exist in BOM to show up in network map
+        let targetRMs = dataIndex.rmIds.filter(id => bomIndex.children.has(id));
+        let targetFGs = dataIndex.fgIds.filter(id => bomIndex.parents.has(id));
 
         if (mapFocus) {
             if (mapFocus.type === 'FG') {
