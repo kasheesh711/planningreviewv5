@@ -8,8 +8,8 @@ import {
 
 // --- CONFIGURATION ---
 const GOOGLE_SHEET_CONFIG = {
-    INVENTORY_URL: "", // Paste your Published CSV Link here
-    BOM_URL: ""        // Paste your Published BOM CSV Link here
+    INVENTORY_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSe_LVLpnR6g1hDB3e9iulTyW6H-GZaDr0RbmOf0_ePIFcS8XnKFngsdZHKy_i4YSLpdLe6BMPAO9Av/pub?gid=1666488360&single=true&output=csv", // Paste your Published CSV Link here
+    BOM_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQwON2WzEI596aLH7oCBzoawdIL1TufE-Ta8GWpsj_D3xQOVggZMsFEl_l4pFzeFmvLPAbyS2AWSghV/pub?gid=106702660&single=true&output=csv"        // Paste your Published BOM CSV Link here
 };
 
 const PLANT_ORGS = ['THRYPM', 'MYBGPM'];
