@@ -3,7 +3,7 @@ import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine, ComposedChart
 } from 'recharts';
 import {
-    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box
+    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, ArrowLeftRight
 } from 'lucide-react';
 
 // --- Helper for CSV Parsing ---
@@ -59,14 +59,17 @@ const getLeadTimeWeeks = (invOrg) => {
 const SAMPLE_CSV = `Factory,Type,Item Code,Inv Org,Item Class,UOM,Strategy,Original Item String,Metric,Start,Date,Value
 SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Req.,0,11/19/2025,9910.16
 SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Inventory (Forecast),0,11/19/2025,5000.00
+SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Target Inv.,0,11/19/2025,4000.00
 SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Req.,0,11/20/2025,500.00
 SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Inventory (Forecast),0,11/20/2025,400.00
+SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Target Inv.,0,11/20/2025,4000.00
 SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Req.,0,11/21/2025,0
-SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Inventory (Forecast),0,11/21/2025,400.00
+SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Inventory (Forecast),0,11/21/2025,-400.00
+SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Target Inv.,0,11/21/2025,4000.00
 SF,RM,BAB250-MR1,MYBGPM,MR,KG,MTS,BAB250-MR1/MYBGPM/MR/KG/MTS,Tot.Inventory (Forecast),0,11/19/2025,2500.00
+SF,RM,BAB250-MR1,MYBGPM,MR,KG,MTS,BAB250-MR1/MYBGPM/MR/KG/MTS,Tot.Target Inv.,0,11/19/2025,3000.00
 SF,RM,BAB250-MR1,MYBGPM,MR,KG,MTS,BAB250-MR1/MYBGPM/MR/KG/MTS,Tot.Inventory (Forecast),0,11/20/2025,2400.00
-NR,RM,BAB250-MR1,THRYPM,MR,LM,NST(MTS),BAB250-MR1/THRYPM/MR/LM/NST(MTS),Indep. Req. (Forecast),0,12/17/2025,150
-NR,RM,BAB250-MR1,THRYPM,MR,LM,NST(MTS),BAB250-MR1/THRYPM/MR/LM/NST(MTS),Tot.Inventory (Forecast),0,12/17/2025,100`;
+SF,RM,BAB250-MR1,MYBGPM,MR,KG,MTS,BAB250-MR1/MYBGPM/MR/KG/MTS,Tot.Target Inv.,0,11/20/2025,3000.00`;
 
 const DEFAULT_BOM = [
     { parent: 'AAG620-MR2', child: 'BAB250-MR1', ratio: 0.5, plant: 'MYBGPM' }, 
@@ -213,147 +216,270 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false }) =>
     );
 };
 
-// --- NEW: Supply Chain Network Map Component ---
-const SupplyChainMap = ({ selectedItem, bomData, inventoryData, dateRange }) => {
-    // Logic to build the node data
-    const nodes = useMemo(() => {
-        if (!selectedItem) return null;
+// --- Weekly Health Indicator Component ---
+const WeeklyHealthIndicator = ({ data }) => {
+    // Expecting data: [{ week: 1, pct: 120 }, { week: 2, pct: 80 }, ...]
+    if (!data || data.length === 0) return <div className="text-[10px] text-slate-400">No forecast data</div>;
 
-        // 1. Central Node (The Selected FG)
-        // Calculate Min Inventory Status over date range
-        const fgRecords = inventoryData.filter(d => 
-            d['Item Code'] === selectedItem.itemCode && 
-            d['Inv Org'] === selectedItem.invOrg &&
-            d.Metric === 'Tot.Inventory (Forecast)' &&
+    return (
+        <div className="flex items-center gap-1 mt-2">
+            {data.map((w, idx) => {
+                let colorClass = 'bg-slate-200';
+                if (w.pct >= 100) colorClass = 'bg-emerald-500';
+                else if (w.pct > 0) colorClass = 'bg-amber-400';
+                else colorClass = 'bg-red-500';
+                
+                return (
+                    <div key={idx} className="group relative flex-1 h-2 first:rounded-l-sm last:rounded-r-sm bg-slate-100 overflow-hidden">
+                        <div className={`h-full w-full ${colorClass}`} title={`Week ${w.week}: ${w.pct.toFixed(0)}% Target`}></div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
+
+// --- Node Card Component ---
+const NodeCard = ({ node, onSelect, isActive, onOpenDetail }) => {
+    const statusColors = {
+        'Critical': 'border-red-200 bg-red-50/50 hover:border-red-300',
+        'Low': 'border-amber-200 bg-amber-50/50 hover:border-amber-300',
+        'Good': 'border-emerald-200 bg-emerald-50/50 hover:border-emerald-300',
+        'Neutral': 'border-slate-200 bg-slate-50/50 hover:border-indigo-300'
+    };
+    
+    return (
+        <div 
+            className={`relative flex flex-col p-3 rounded-xl border shadow-sm transition-all cursor-pointer group
+                ${isActive ? 'ring-2 ring-indigo-500 border-transparent shadow-md bg-white' : statusColors[node.status] || statusColors['Neutral']}`}
+            onClick={onSelect}
+        >
+            <div className="flex justify-between items-start mb-1">
+                <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${isActive ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-white/60 border-black/5 text-slate-500'}`}>
+                        {node.type}
+                    </span>
+                    <div className="text-xs font-bold text-slate-800 truncate max-w-[120px]" title={node.id}>{node.id}</div>
+                </div>
+                <button 
+                    onClick={(e) => { e.stopPropagation(); onOpenDetail(node); }}
+                    className="p-1 rounded-md hover:bg-white text-slate-400 hover:text-indigo-600 transition-colors"
+                    title="View Details"
+                >
+                    <Table className="w-3.5 h-3.5" />
+                </button>
+            </div>
+            
+            <div className="flex items-baseline justify-between mt-1">
+                <div className="text-[10px] text-slate-500 font-mono">Inv: {node.currentInv?.toLocaleString() || 0}</div>
+                {node.status === 'Critical' && <AlertTriangle className="w-3 h-3 text-red-500" />}
+            </div>
+
+            {/* Weekly Health Bar */}
+            <WeeklyHealthIndicator data={node.weeklyHealth} />
+        </div>
+    );
+};
+
+// --- Supply Chain Network Map Component (Enhanced) ---
+const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRange, onOpenDetails }) => {
+    // Local State for Map Interaction
+    const [mapFocus, setMapFocus] = useState(null); // { type: 'FG'|'RM', id: string, invOrg: string }
+    const [searchTermRM, setSearchTermRM] = useState("");
+    const [searchTermFG, setSearchTermFG] = useState("");
+    const [sortRM, setSortRM] = useState("alpha"); // 'alpha' | 'invDesc'
+    const [sortFG, setSortFG] = useState("alpha"); 
+
+    // Sync parent selection to local focus initially
+    useEffect(() => {
+        if (selectedItemFromParent) {
+            setMapFocus({ 
+                type: 'FG', 
+                id: selectedItemFromParent.itemCode, 
+                invOrg: selectedItemFromParent.invOrg 
+            });
+        }
+    }, [selectedItemFromParent]);
+
+    // --- Helper to aggregate weekly health ---
+    const getWeeklyHealth = (itemCode, invOrg) => {
+        const records = inventoryData.filter(d => 
+            d['Item Code'] === itemCode && 
+            d['Inv Org'] === invOrg &&
             (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
             (!dateRange.end || d._dateObj <= new Date(dateRange.end))
         );
-        const minFgInv = fgRecords.length > 0 ? Math.min(...fgRecords.map(d => d.Value)) : 0;
-        const fgStatus = minFgInv < 0 ? 'Critical' : (minFgInv < 1000 ? 'Low' : 'Good'); // Simplified logic
-
-        const centralNode = {
-            id: selectedItem.itemCode,
-            label: selectedItem.itemCode,
-            sub: selectedItem.invOrg,
-            type: 'FG',
-            status: fgStatus,
-            value: minFgInv
-        };
-
-        // 2. Left Nodes (Raw Materials from BOM)
-        const ingredients = bomData.filter(b => 
-            b.parent === selectedItem.itemCode && 
-            (!b.plant || b.plant === selectedItem.invOrg)
-        );
         
-        const rmNodes = ingredients.map(ing => {
-            const rmRecords = inventoryData.filter(d => 
-                d['Item Code'] === ing.child && 
-                d['Inv Org'] === selectedItem.invOrg && // Assumption: RM is at same plant
-                d.Metric === 'Tot.Inventory (Forecast)' &&
-                (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
-                (!dateRange.end || d._dateObj <= new Date(dateRange.end))
-            );
-            const minRmInv = rmRecords.length > 0 ? Math.min(...rmRecords.map(d => d.Value)) : 0;
-            const rmStatus = minRmInv < 0 ? 'Critical' : 'Good';
-
-            return {
-                id: ing.child,
-                label: ing.child,
-                sub: `Ratio: ${ing.ratio}`,
-                type: 'RM',
-                status: rmStatus,
-                value: minRmInv
-            };
+        const weeklyMap = {};
+        records.forEach(r => {
+            const weekNum = Math.floor((r._dateObj.getTime() - new Date(r._dateObj.getFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000));
+            if (!weeklyMap[weekNum]) weeklyMap[weekNum] = { inv: 0, target: 0, count: 0 };
+            
+            if (r.Metric === 'Tot.Inventory (Forecast)') weeklyMap[weekNum].inv += r.Value;
+            if (r.Metric === 'Tot.Target Inv.') weeklyMap[weekNum].target += r.Value;
+            if (r.Metric === 'Tot.Inventory (Forecast)') weeklyMap[weekNum].count++;
         });
 
-        // 3. Right Nodes (DC Placeholders)
-        const dcNodes = [
-            { id: 'DC-01', label: 'North DC', sub: 'Pending Data', type: 'DC', status: 'Neutral' },
-            { id: 'DC-02', label: 'South DC', sub: 'Pending Data', type: 'DC', status: 'Neutral' }
-        ];
+        return Object.keys(weeklyMap).sort().map(w => {
+            const d = weeklyMap[w];
+            const avgInv = d.count ? d.inv / d.count : 0;
+            const avgTarget = d.count ? d.target / d.count : 1; // avoid div 0
+            const pct = avgTarget > 0 ? (avgInv / avgTarget) * 100 : 0;
+            return { week: w, pct };
+        });
+    };
 
-        return { centralNode, rmNodes, dcNodes };
+    // --- Helper to get node stats ---
+    const getNodeStats = (itemCode, invOrg, type) => {
+        const records = inventoryData.filter(d => 
+            d['Item Code'] === itemCode && 
+            d['Inv Org'] === invOrg &&
+            d.Metric === 'Tot.Inventory (Forecast)'
+        );
+        // Use latest available date for "Current Inv"
+        const sorted = records.sort((a,b) => b._dateObj - a._dateObj);
+        const currentInv = sorted.length > 0 ? sorted[0].Value : 0;
+        const status = currentInv < 0 ? 'Critical' : (currentInv < 1000 ? 'Low' : 'Good');
+        
+        return {
+            id: itemCode,
+            itemCode: itemCode, // For detail view compat
+            invOrg: invOrg,
+            type,
+            status,
+            currentInv,
+            weeklyHealth: getWeeklyHealth(itemCode, invOrg)
+        };
+    };
 
-    }, [selectedItem, bomData, inventoryData, dateRange]);
+    // --- Compute Lists based on Map Focus ---
+    const { rmList, fgList } = useMemo(() => {
+        // Base lists (all available in raw data for the selected plants)
+        // Actually, we should limit to what's in BOM for connections, but user wants scrollable lists.
+        // Let's derive distinct items from Inventory Data first.
+        
+        let allRMs = [...new Set(inventoryData.filter(d => d.Type === 'RM').map(d => d['Item Code']))];
+        let allFGs = [...new Set(inventoryData.filter(d => d.Type === 'FG').map(d => d['Item Code']))];
 
-    if (!nodes) return (
-        <div className="h-64 flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-            <Network className="w-10 h-10 mb-2 opacity-50" />
-            <p>Select an item in the Gantt below to visualize its supply network</p>
+        // Apply Bi-Directional Filtering
+        if (mapFocus) {
+            if (mapFocus.type === 'FG') {
+                // FG Selected -> Filter RMs to ingredients
+                const ingredients = bomData.filter(b => b.parent === mapFocus.id).map(b => b.child);
+                allRMs = allRMs.filter(id => ingredients.includes(id));
+            } else if (mapFocus.type === 'RM') {
+                // RM Selected -> Filter FGs to consumers
+                const consumers = bomData.filter(b => b.child === mapFocus.id).map(b => b.parent);
+                allFGs = allFGs.filter(id => consumers.includes(id));
+            }
+        }
+
+        // Map to full node objects
+        let rmNodes = allRMs.map(id => {
+            // Find org from data (first match or specific if known)
+            const record = inventoryData.find(d => d['Item Code'] === id && d.Type === 'RM'); 
+            return record ? getNodeStats(id, record['Inv Org'], 'RM') : null;
+        }).filter(Boolean);
+
+        let fgNodes = allFGs.map(id => {
+            const record = inventoryData.find(d => d['Item Code'] === id && d.Type === 'FG');
+            return record ? getNodeStats(id, record['Inv Org'], 'FG') : null;
+        }).filter(Boolean);
+
+        // Apply Search
+        if (searchTermRM) rmNodes = rmNodes.filter(n => n.id.toLowerCase().includes(searchTermRM.toLowerCase()));
+        if (searchTermFG) fgNodes = fgNodes.filter(n => n.id.toLowerCase().includes(searchTermFG.toLowerCase()));
+
+        // Apply Sort
+        const sorter = (a, b, method) => {
+            if (method === 'alpha') return a.id.localeCompare(b.id);
+            if (method === 'invDesc') return b.currentInv - a.currentInv;
+            return 0;
+        };
+        rmNodes.sort((a, b) => sorter(a, b, sortRM));
+        fgNodes.sort((a, b) => sorter(a, b, sortFG));
+
+        return { rmList: rmNodes, fgList: fgNodes };
+
+    }, [inventoryData, bomData, mapFocus, searchTermRM, searchTermFG, sortRM, sortFG, dateRange]);
+
+    // --- Render Column Helper ---
+    const RenderColumn = ({ title, count, items, type, searchTerm, setSearchTerm, setSort, sortValue, isActiveCol }) => (
+        <div className={`flex flex-col h-full border-r border-slate-200 bg-slate-50/30 ${isActiveCol ? 'bg-indigo-50/30' : ''} min-w-[280px] max-w-[320px]`}>
+            <div className="p-3 border-b border-slate-200 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                        {type === 'RM' ? <Box className="w-3 h-3" /> : <Factory className="w-3 h-3" />}
+                        {title} <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md text-[10px]">{count}</span>
+                    </h3>
+                    <div className="flex gap-1">
+                        <button onClick={() => setSort('alpha')} className={`p-1 rounded hover:bg-slate-100 ${sortValue === 'alpha' ? 'text-indigo-600' : 'text-slate-400'}`} title="Sort Alpha"><ArrowUpDown className="w-3 h-3" /></button>
+                        <button onClick={() => setSort('invDesc')} className={`p-1 rounded hover:bg-slate-100 ${sortValue === 'invDesc' ? 'text-indigo-600' : 'text-slate-400'}`} title="Sort Inv"><Activity className="w-3 h-3" /></button>
+                    </div>
+                </div>
+                <div className="relative">
+                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-slate-400" />
+                    <input 
+                        type="text" 
+                        className="w-full pl-7 pr-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 bg-white"
+                        placeholder="Search Item..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin scrollbar-thumb-slate-200">
+                {items.length > 0 ? items.map(node => (
+                    <NodeCard 
+                        key={node.id} 
+                        node={node} 
+                        isActive={mapFocus && mapFocus.id === node.id}
+                        onSelect={() => setMapFocus(node)}
+                        onOpenDetail={onOpenDetails}
+                    />
+                )) : <div className="text-xs text-center text-slate-400 py-8 italic">No items found</div>}
+            </div>
         </div>
     );
 
-    const NodeCard = ({ node, align = 'center' }) => {
-        const statusColors = {
-            'Critical': 'border-red-300 bg-red-50 text-red-700',
-            'Low': 'border-amber-300 bg-amber-50 text-amber-700',
-            'Good': 'border-emerald-300 bg-emerald-50 text-emerald-700',
-            'Neutral': 'border-slate-200 bg-slate-50 text-slate-500'
-        };
-        const dotColors = {
-            'Critical': 'bg-red-500', 'Low': 'bg-amber-500', 'Good': 'bg-emerald-500', 'Neutral': 'bg-slate-300'
-        };
-
-        return (
-            <div className={`relative flex items-center p-3 rounded-xl border shadow-sm transition-all w-56 ${statusColors[node.status] || statusColors['Neutral']}`}>
-                <div className={`w-2.5 h-2.5 rounded-full mr-3 ${dotColors[node.status] || dotColors['Neutral']}`}></div>
-                <div className="flex-1 min-w-0">
-                    <div className="text-xs font-bold uppercase tracking-wider opacity-80 flex items-center justify-between">
-                        {node.type}
-                        {node.type === 'FG' && <Factory className="w-3 h-3" />}
-                        {node.type === 'RM' && <Box className="w-3 h-3" />}
-                        {node.type === 'DC' && <Warehouse className="w-3 h-3" />}
-                    </div>
-                    <div className="font-bold text-sm truncate" title={node.label}>{node.label}</div>
-                    <div className="text-xs opacity-70 truncate">{node.sub}</div>
-                    {node.value !== undefined && (
-                        <div className="mt-1.5 h-1.5 w-full bg-black/5 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${dotColors[node.status]}`} style={{ width: '60%' }}></div>
-                        </div>
-                    )}
-                </div>
-                
-                {/* Connectors */}
-                {align === 'left' && <div className="absolute -right-4 top-1/2 -translate-y-1/2 w-4 h-0.5 bg-slate-300"></div>}
-                {align === 'right' && <div className="absolute -left-4 top-1/2 -translate-y-1/2 w-4 h-0.5 bg-slate-300"></div>}
-            </div>
-        );
-    };
-
     return (
-        <div className="flex items-center justify-center h-64 overflow-x-auto p-4 bg-slate-50/30 rounded-xl border border-slate-100">
-            <div className="flex items-center gap-8 min-w-[600px]">
-                
-                {/* RM Column */}
-                <div className="flex flex-col gap-3 justify-center">
-                    {nodes.rmNodes.length > 0 ? nodes.rmNodes.map(n => (
-                        <NodeCard key={n.id} node={n} align="left" />
-                    )) : <div className="text-xs text-slate-400 italic p-4">No Linked RMs found in BOM</div>}
-                </div>
+        <div className="flex h-[500px] overflow-hidden bg-white rounded-xl border border-slate-200 shadow-inner">
+            {/* RM Column */}
+            <RenderColumn 
+                title="Raw Materials" 
+                count={rmList.length} 
+                items={rmList} 
+                type="RM"
+                searchTerm={searchTermRM}
+                setSearchTerm={setSearchTermRM}
+                sortValue={sortRM}
+                setSort={setSortRM}
+                isActiveCol={mapFocus && mapFocus.type === 'RM'}
+            />
 
-                {/* Arrows */}
-                <div className="flex flex-col justify-center text-slate-300">
-                    <ArrowRight className="w-6 h-6" />
-                </div>
+            {/* FG Column */}
+            <RenderColumn 
+                title="Finished Goods (Plant)" 
+                count={fgList.length} 
+                items={fgList} 
+                type="FG"
+                searchTerm={searchTermFG}
+                setSearchTerm={setSearchTermFG}
+                sortValue={sortFG}
+                setSort={setSortFG}
+                isActiveCol={mapFocus && mapFocus.type === 'FG'}
+            />
 
-                {/* Central FG Column */}
-                <div className="flex flex-col justify-center relative">
-                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase text-slate-400 tracking-widest">Plant View</div>
-                    <NodeCard node={nodes.centralNode} />
+            {/* DC Placeholder Column */}
+            <div className="flex flex-col h-full flex-1 min-w-[200px] bg-slate-50/50">
+                <div className="p-3 border-b border-slate-200 bg-white/50">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                        <Warehouse className="w-3 h-3" /> Distribution Centers
+                    </h3>
                 </div>
-
-                {/* Arrows */}
-                <div className="flex flex-col justify-center text-slate-300">
-                    <ArrowRight className="w-6 h-6" />
-                </div>
-
-                {/* DC Column */}
-                <div className="flex flex-col gap-3 justify-center border-l border-dashed border-slate-200 pl-8 relative">
-                     <div className="absolute -top-6 left-8 text-[10px] font-bold uppercase text-slate-400 tracking-widest">Distribution</div>
-                    {nodes.dcNodes.map(n => (
-                        <NodeCard key={n.id} node={n} align="right" />
-                    ))}
+                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-2">
+                    <Network className="w-8 h-8 opacity-20" />
+                    <p className="text-xs italic">DC Connectivity Pending</p>
                 </div>
             </div>
         </div>
@@ -791,7 +917,13 @@ export default function SupplyChainDashboard() {
                                 <div><h2 className="text-lg font-bold text-slate-900 tracking-tight">Supply Chain Network Map</h2><p className="text-sm text-slate-500">Material Flow & Inventory Health</p></div>
                             </div>
                         </div>
-                        <SupplyChainMap selectedItem={selectedItem} bomData={bomData} inventoryData={rawData} dateRange={dateRange} />
+                        <SupplyChainMap 
+                            selectedItemFromParent={selectedItem} 
+                            bomData={bomData} 
+                            inventoryData={rawData} 
+                            dateRange={dateRange} 
+                            onOpenDetails={(item) => setSelectedItem({itemCode: item.id, invOrg: item.invOrg})} 
+                        />
                     </div>
                 )}
 
