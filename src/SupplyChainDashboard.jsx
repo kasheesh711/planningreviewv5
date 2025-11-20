@@ -1234,7 +1234,7 @@ export default function SupplyChainDashboard() {
                         </div>
                     </div>
                 )}
-            </main>
+            </div>
             <style jsx global>{`@keyframes pulse-slow { 0%, 100% { opacity: 1; } 50% { opacity: .85; } } .animate-pulse-slow { animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }`}</style>
         </div>
     );
