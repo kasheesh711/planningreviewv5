@@ -6,14 +6,14 @@ import {
     Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, ArrowLeftRight, MapPin, RefreshCw
 } from 'lucide-react';
 
-// --- CONFIGURATION: GOOGLE SHEETS ---
-// 1. Go to File > Share > Publish to Web
-// 2. Select the specific sheet tab and choose "Comma-separated values (.csv)"
-// 3. Paste the links below
+// --- CONFIGURATION ---
 const GOOGLE_SHEET_CONFIG = {
-    INVENTORY_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSe_LVLpnR6g1hDB3e9iulTyW6H-GZaDr0RbmOf0_ePIFcS8XnKFngsdZHKy_i4YSLpdLe6BMPAO9Av/pub?gid=1666488360&single=true&output=csv", // e.g. "https://docs.google.com/spreadsheets/d/e/2PAC.../pub?output=csv"
-    BOM_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQwON2WzEI596aLH7oCBzoawdIL1TufE-Ta8GWpsj_D3xQOVggZMsFEl_l4pFzeFmvLPAbyS2AWSghV/pub?gid=106702660&single=true&output=csv"        // e.g. "https://docs.google.com/spreadsheets/d/e/2PAC.../pub?output=csv"
+    INVENTORY_URL: "", // Paste your Published CSV Link here
+    BOM_URL: ""        // Paste your Published BOM CSV Link here
 };
+
+const PLANT_ORGS = ['THRYPM', 'MYBGPM'];
+const DC_ORGS = ['THBNDM', 'VNHCDM', 'VNHNDM', 'IDCKDM', 'PHPSDM'];
 
 // --- Helper for CSV Parsing ---
 const parseCSV = (csvText) => {
@@ -64,7 +64,7 @@ const getLeadTimeWeeks = (invOrg) => {
     return 4;
 };
 
-// --- Sample Data (Fallback) ---
+// --- Sample Data ---
 const SAMPLE_CSV = `Factory,Type,Item Code,Inv Org,Item Class,UOM,Strategy,Original Item String,Metric,Start,Date,Value
 SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Req.,0,11/19/2025,9910.16
 SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Inventory (Forecast),0,11/19/2025,5000.00
@@ -78,7 +78,9 @@ SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Target Inv.,0,
 SF,RM,BAB250-MR1,MYBGPM,FA,KG,MTS,BAB250-MR1/MYBGPM/FA/KG/MTS,Tot.Inventory (Forecast),0,11/19/2025,2500.00
 SF,RM,BAB250-MR1,MYBGPM,FA,KG,MTS,BAB250-MR1/MYBGPM/FA/KG/MTS,Tot.Target Inv.,0,11/19/2025,3000.00
 SF,RM,BAB250-MR1,MYBGPM,FA,KG,MTS,BAB250-MR1/MYBGPM/FA/KG/MTS,Tot.Inventory (Forecast),0,11/20/2025,2400.00
-SF,RM,BAB250-MR1,MYBGPM,FA,KG,MTS,BAB250-MR1/MYBGPM/FA/KG/MTS,Tot.Target Inv.,0,11/20/2025,3000.00`;
+SF,RM,BAB250-MR1,MYBGPM,FA,KG,MTS,BAB250-MR1/MYBGPM/FA/KG/MTS,Tot.Target Inv.,0,11/20/2025,3000.00
+NR,FG,AAG620-MR2,IDCKDM,MR,LM,MTS,AAG620-MR2/IDCKDM/MR/LM/MTS,Tot.Inventory (Forecast),0,11/19/2025,1000.00
+NR,FG,AAG620-MR2,IDCKDM,MR,LM,MTS,AAG620-MR2/IDCKDM/MR/LM/MTS,Tot.Target Inv.,0,11/19/2025,2000.00`;
 
 const DEFAULT_BOM = [
     { parent: 'AAG620-MR2', child: 'BAB250-MR1', ratio: 0.5, plant: 'MYBGPM' }, 
@@ -301,7 +303,7 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
         <div className="p-3 border-b border-slate-200 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
             <div className="flex items-center justify-between mb-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                    {type === 'RM' ? <Box className="w-3 h-3" /> : <Factory className="w-3 h-3" />}
+                    {type === 'RM' ? <Box className="w-3 h-3" /> : (type === 'FG' ? <Factory className="w-3 h-3" /> : <Warehouse className="w-3 h-3" />)}
                     {title} <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md text-[10px]">{count}</span>
                 </h3>
                 <div className="flex gap-1">
@@ -323,7 +325,7 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin scrollbar-thumb-slate-200">
             {items.length > 0 ? items.map(node => (
-                <React.Fragment key={node.id}>
+                <React.Fragment key={`${node.id}-${node.invOrg}`}>
                    {node.component} 
                 </React.Fragment>
             )) : <div className="text-xs text-center text-slate-400 py-8 italic">No items found</div>}
@@ -335,16 +337,25 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
 // --- Supply Chain Network Map Component ---
 const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRange, onOpenDetails }) => {
     const [mapFocus, setMapFocus] = useState(null); 
+    // List States
     const [searchTermRM, setSearchTermRM] = useState("");
     const [searchTermFG, setSearchTermFG] = useState("");
+    const [searchTermDC, setSearchTermDC] = useState(""); 
     const [sortRM, setSortRM] = useState("alpha"); 
-    const [sortFG, setSortFG] = useState("alpha"); 
+    const [sortFG, setSortFG] = useState("alpha");
+    const [sortDC, setSortDC] = useState("alpha"); 
+
+    // Filters
     const [rmClassFilter, setRmClassFilter] = useState('All');
+    const [fgPlantFilter, setFgPlantFilter] = useState('All'); 
+    const [dcFilter, setDcFilter] = useState('All'); 
 
     useEffect(() => {
         if (selectedItemFromParent) {
-            const match = inventoryData.find(d => d['Item Code'] === selectedItemFromParent.itemCode);
-            const type = match ? match.Type : 'FG';
+            let type = 'FG';
+            if (PLANT_ORGS.includes(selectedItemFromParent.invOrg)) type = 'FG';
+            else if (DC_ORGS.includes(selectedItemFromParent.invOrg)) type = 'DC';
+            else type = 'RM'; 
 
             setMapFocus({ 
                 type: type,
@@ -356,25 +367,29 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
     // 1. Index Data
     const dataIndex = useMemo(() => {
-        const idx = {};
-        const rms = new Set();
-        const fgs = new Set();
+        const idx = {}; // Key: "ItemCode|InvOrg"
+        const rmKeys = new Set();
+        const fgKeys = new Set();
+        const dcKeys = new Set();
 
         inventoryData.forEach(row => {
-            const code = row['Item Code'];
-            if (!idx[code]) idx[code] = [];
-            idx[code].push(row);
+            const key = `${row['Item Code']}|${row['Inv Org']}`;
+            if (!idx[key]) idx[key] = [];
+            idx[key].push(row);
             
-            if (row.Type === 'RM') rms.add(code);
-            else if (row.Type === 'FG') fgs.add(code);
+            if (row.Type === 'RM') rmKeys.add(key);
+            else if (row.Type === 'FG') {
+                if (PLANT_ORGS.includes(row['Inv Org'])) fgKeys.add(key);
+                else if (DC_ORGS.includes(row['Inv Org'])) dcKeys.add(key);
+            }
         });
-        return { index: idx, rmIds: Array.from(rms), fgIds: Array.from(fgs) };
+        return { index: idx, rmKeys: Array.from(rmKeys), fgKeys: Array.from(fgKeys), dcKeys: Array.from(dcKeys) };
     }, [inventoryData]);
 
     // 2. Index BOM
     const bomIndex = useMemo(() => {
-        const p2c = {}; 
-        const c2p = {}; 
+        const p2c = {}; // Parent -> Children
+        const c2p = {}; // Child -> Parents
         const parents = new Set();
         const children = new Set();
         
@@ -391,11 +406,12 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
     }, [bomData]);
 
     // 3. Get Stats
-    const getNodeStats = useCallback((itemCode, type) => {
-        const records = dataIndex.index[itemCode];
+    const getNodeStats = useCallback((key, type) => {
+        const records = dataIndex.index[key];
         if (!records) return null;
 
         const firstRec = records[0];
+        const itemCode = firstRec['Item Code'];
         const invOrg = firstRec['Inv Org'];
         const itemClass = firstRec['Item Class']; 
 
@@ -445,34 +461,76 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
     }, [dataIndex, dateRange]);
 
     // 4. Generate Lists
-    const { rmList, fgList } = useMemo(() => {
-        // Filter 1: Must exist in BOM
-        let targetRMs = dataIndex.rmIds.filter(id => bomIndex.children.has(id));
-        let targetFGs = dataIndex.fgIds.filter(id => bomIndex.parents.has(id));
+    const { rmList, fgList, dcList } = useMemo(() => {
+        // Initial Keys: Unique Item+Org Strings
+        let targetRMKeys = dataIndex.rmKeys;
+        let targetFGKeys = dataIndex.fgKeys;
+        let targetDCKeys = dataIndex.dcKeys;
 
+        // ORPHAN RULE: Filter Raw Materials (Must be in BOM) & Plant FGs (Must be in BOM)
+        // Keys are "ItemCode|InvOrg", split to check ID against BOM
+        targetRMKeys = targetRMKeys.filter(k => bomIndex.children.has(k.split('|')[0]));
+        targetFGKeys = targetFGKeys.filter(k => bomIndex.parents.has(k.split('|')[0]));
+
+        // --- FILTERING ---
         if (mapFocus) {
+            const focusId = mapFocus.id; // Item Code
+            
             if (mapFocus.type === 'FG') {
-                const children = bomIndex.p2c[mapFocus.id];
-                if (children) targetRMs = targetRMs.filter(id => children.has(id));
-                else targetRMs = []; 
+                // Plant FG Selected
+                // 1. Show Ingredients (RM)
+                const ingredients = bomIndex.p2c[focusId];
+                if (ingredients) targetRMKeys = targetRMKeys.filter(k => ingredients.has(k.split('|')[0]));
+                else targetRMKeys = []; 
+                
+                // 2. Show Downstream DC items (Same Item Code)
+                targetDCKeys = targetDCKeys.filter(k => k.split('|')[0] === focusId);
+
             } else if (mapFocus.type === 'RM') {
-                const parents = bomIndex.c2p[mapFocus.id];
-                if (parents) targetFGs = targetFGs.filter(id => parents.has(id));
-                else targetFGs = []; 
+                // RM Selected
+                // 1. Show Consumers (Plant FG)
+                const consumers = bomIndex.c2p[focusId];
+                if (consumers) targetFGKeys = targetFGKeys.filter(k => consumers.has(k.split('|')[0]));
+                else targetFGKeys = [];
+                
+                // Match DC list to the Visible Plant FGs for consistency
+                const visibleFgCodes = new Set(targetFGKeys.map(k => k.split('|')[0]));
+                targetDCKeys = targetDCKeys.filter(k => visibleFgCodes.has(k.split('|')[0]));
+
+            } else if (mapFocus.type === 'DC') {
+                // DC Selected
+                // 1. Show Supplier Plant FGs (Same Item Code)
+                targetFGKeys = targetFGKeys.filter(k => k.split('|')[0] === focusId);
+                
+                // 2. Show Ingredients of those FGs
+                const ingredients = bomIndex.p2c[focusId];
+                if (ingredients) targetRMKeys = targetRMKeys.filter(k => ingredients.has(k.split('|')[0]));
+                else targetRMKeys = [];
             }
         }
 
-        if (searchTermRM) targetRMs = targetRMs.filter(id => id.toLowerCase().includes(searchTermRM.toLowerCase()));
-        if (searchTermFG) targetFGs = targetFGs.filter(id => id.toLowerCase().includes(searchTermFG.toLowerCase()));
+        // --- SEARCH ---
+        if (searchTermRM) targetRMKeys = targetRMKeys.filter(k => k.toLowerCase().includes(searchTermRM.toLowerCase()));
+        if (searchTermFG) targetFGKeys = targetFGKeys.filter(k => k.toLowerCase().includes(searchTermFG.toLowerCase()));
+        if (searchTermDC) targetDCKeys = targetDCKeys.filter(k => k.toLowerCase().includes(searchTermDC.toLowerCase()));
 
-        let rmNodes = targetRMs.map(id => getNodeStats(id, 'RM')).filter(Boolean);
-        let fgNodes = targetFGs.map(id => getNodeStats(id, 'FG')).filter(Boolean);
+        // --- HYDRATE NODES ---
+        let rmNodes = targetRMKeys.map(k => getNodeStats(k, 'RM')).filter(Boolean);
+        let fgNodes = targetFGKeys.map(k => getNodeStats(k, 'FG')).filter(Boolean);
+        let dcNodes = targetDCKeys.map(k => getNodeStats(k, 'DC')).filter(Boolean);
 
-        // RM Class Filter
+        // --- CATEGORY FILTERS ---
         if (rmClassFilter !== 'All') {
             rmNodes = rmNodes.filter(n => n.itemClass && n.itemClass.includes(rmClassFilter));
         }
+        if (fgPlantFilter !== 'All') {
+            fgNodes = fgNodes.filter(n => n.invOrg === fgPlantFilter);
+        }
+        if (dcFilter !== 'All') {
+            dcNodes = dcNodes.filter(n => n.invOrg === dcFilter);
+        }
 
+        // --- SORT ---
         const sorter = (a, b, method) => {
             if (method === 'alpha') return a.id.localeCompare(b.id);
             if (method === 'invDesc') return b.currentInv - a.currentInv;
@@ -480,14 +538,17 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         };
         rmNodes.sort((a, b) => sorter(a, b, sortRM));
         fgNodes.sort((a, b) => sorter(a, b, sortFG));
+        dcNodes.sort((a, b) => sorter(a, b, sortDC));
 
+        // --- WRAP ---
         const wrapNode = (n) => ({
             id: n.id, 
+            invOrg: n.invOrg,
             component: (
                 <NodeCard 
-                    key={n.id} 
+                    key={`${n.id}-${n.invOrg}`} 
                     node={n} 
-                    isActive={mapFocus && mapFocus.id === n.id}
+                    isActive={mapFocus && mapFocus.id === n.id && mapFocus.invOrg === n.invOrg}
                     onSelect={() => setMapFocus(n)}
                     onOpenDetail={onOpenDetails}
                 />
@@ -496,10 +557,11 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
         return { 
             rmList: rmNodes.map(wrapNode), 
-            fgList: fgNodes.map(wrapNode) 
+            fgList: fgNodes.map(wrapNode),
+            dcList: dcNodes.map(wrapNode)
         };
 
-    }, [dataIndex, bomIndex, mapFocus, searchTermRM, searchTermFG, sortRM, sortFG, dateRange, getNodeStats, onOpenDetails, rmClassFilter]);
+    }, [dataIndex, bomIndex, mapFocus, searchTermRM, searchTermFG, searchTermDC, sortRM, sortFG, sortDC, dateRange, getNodeStats, onOpenDetails, rmClassFilter, fgPlantFilter, dcFilter]);
 
     return (
         <div className="flex h-[500px] overflow-hidden bg-white rounded-xl border border-slate-200 shadow-inner">
@@ -515,7 +577,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
                 setSort={setSortRM}
                 isActiveCol={mapFocus && mapFocus.type === 'RM'}
             >
-                <div className="flex gap-1 mt-1 overflow-x-auto pb-1">
+                <div className="flex gap-1 mt-1 overflow-x-auto pb-1 scrollbar-none">
                     {['All', 'FA', 'AD', 'LI'].map(cls => (
                         <button 
                             key={cls}
@@ -542,20 +604,50 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
                 sortValue={sortFG}
                 setSort={setSortFG}
                 isActiveCol={mapFocus && mapFocus.type === 'FG'}
-            />
+            >
+                <div className="flex gap-1 mt-1 overflow-x-auto pb-1 scrollbar-none">
+                    {['All', ...PLANT_ORGS].map(org => (
+                        <button 
+                            key={org}
+                            onClick={() => setFgPlantFilter(org)}
+                            className={`text-[10px] px-2 py-1 rounded-full border transition-colors whitespace-nowrap
+                                ${fgPlantFilter === org 
+                                    ? 'bg-indigo-100 border-indigo-200 text-indigo-700 font-bold' 
+                                    : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-200'}`}
+                        >
+                            {org}
+                        </button>
+                    ))}
+                </div>
+            </RenderColumn>
 
-            {/* DC Placeholder Column */}
-            <div className="flex flex-col h-full flex-1 min-w-[200px] bg-slate-50/50">
-                <div className="p-3 border-b border-slate-200 bg-white/50">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                        <Warehouse className="w-3 h-3" /> Distribution Centers
-                    </h3>
+            {/* DC Column */}
+            <RenderColumn 
+                title="Distribution Centers" 
+                count={dcList.length} 
+                items={dcList} 
+                type="DC"
+                searchTerm={searchTermDC}
+                setSearchTerm={setSearchTermDC}
+                sortValue={sortDC}
+                setSort={setSortDC}
+                isActiveCol={mapFocus && mapFocus.type === 'DC'}
+            >
+                <div className="flex gap-1 mt-1 overflow-x-auto pb-1 scrollbar-none">
+                    {['All', ...DC_ORGS].map(org => (
+                        <button 
+                            key={org}
+                            onClick={() => setDcFilter(org)}
+                            className={`text-[10px] px-2 py-1 rounded-full border transition-colors whitespace-nowrap
+                                ${dcFilter === org 
+                                    ? 'bg-indigo-100 border-indigo-200 text-indigo-700 font-bold' 
+                                    : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-200'}`}
+                        >
+                            {org}
+                        </button>
+                    ))}
                 </div>
-                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-2">
-                    <Network className="w-8 h-8 opacity-20" />
-                    <p className="text-xs italic">DC Connectivity Pending</p>
-                </div>
-            </div>
+            </RenderColumn>
         </div>
     );
 };
