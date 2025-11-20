@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine, ComposedChart
 } from 'recharts';
@@ -66,10 +66,10 @@ SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Target Inv.,0,
 SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Req.,0,11/21/2025,0
 SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Inventory (Forecast),0,11/21/2025,-400.00
 SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Target Inv.,0,11/21/2025,4000.00
-SF,RM,BAB250-MR1,MYBGPM,MR,KG,MTS,BAB250-MR1/MYBGPM/MR/KG/MTS,Tot.Inventory (Forecast),0,11/19/2025,2500.00
-SF,RM,BAB250-MR1,MYBGPM,MR,KG,MTS,BAB250-MR1/MYBGPM/MR/KG/MTS,Tot.Target Inv.,0,11/19/2025,3000.00
-SF,RM,BAB250-MR1,MYBGPM,MR,KG,MTS,BAB250-MR1/MYBGPM/MR/KG/MTS,Tot.Inventory (Forecast),0,11/20/2025,2400.00
-SF,RM,BAB250-MR1,MYBGPM,MR,KG,MTS,BAB250-MR1/MYBGPM/MR/KG/MTS,Tot.Target Inv.,0,11/20/2025,3000.00`;
+SF,RM,BAB250-MR1,MYBGPM,FA,KG,MTS,BAB250-MR1/MYBGPM/FA/KG/MTS,Tot.Inventory (Forecast),0,11/19/2025,2500.00
+SF,RM,BAB250-MR1,MYBGPM,FA,KG,MTS,BAB250-MR1/MYBGPM/FA/KG/MTS,Tot.Target Inv.,0,11/19/2025,3000.00
+SF,RM,BAB250-MR1,MYBGPM,FA,KG,MTS,BAB250-MR1/MYBGPM/FA/KG/MTS,Tot.Inventory (Forecast),0,11/20/2025,2400.00
+SF,RM,BAB250-MR1,MYBGPM,FA,KG,MTS,BAB250-MR1/MYBGPM/FA/KG/MTS,Tot.Target Inv.,0,11/20/2025,3000.00`;
 
 const DEFAULT_BOM = [
     { parent: 'AAG620-MR2', child: 'BAB250-MR1', ratio: 0.5, plant: 'MYBGPM' }, 
@@ -218,7 +218,7 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false }) =>
 
 // --- Weekly Health Indicator Component ---
 const WeeklyHealthIndicator = React.memo(({ data }) => {
-    if (!data || data.length === 0) return <div className="text-[10px] text-slate-400">No forecast data</div>;
+    if (!data || data.length === 0) return <div className="text-[10px] text-slate-400 mt-2">No forecast data</div>;
 
     return (
         <div className="flex items-center gap-1 mt-2">
@@ -276,9 +276,55 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
 
             {/* Weekly Health Bar */}
             <WeeklyHealthIndicator data={node.weeklyHealth} />
+            {/* Helper for Item Class Visibility */}
+            {node.itemClass && <div className="text-[9px] text-slate-300 mt-1">{node.itemClass}</div>}
         </div>
     );
 });
+
+// --- Render Column Helper (EXTRACTED TO FIX SCROLL SNAP) ---
+const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSearchTerm, setSort, sortValue, isActiveCol, children }) => (
+    <div className={`flex flex-col h-full border-r border-slate-200 bg-slate-50/30 ${isActiveCol ? 'bg-indigo-50/30' : ''} min-w-[280px] max-w-[320px]`}>
+        <div className="p-3 border-b border-slate-200 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+            <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                    {type === 'RM' ? <Box className="w-3 h-3" /> : <Factory className="w-3 h-3" />}
+                    {title} <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md text-[10px]">{count}</span>
+                </h3>
+                <div className="flex gap-1">
+                    <button onClick={() => setSort('alpha')} className={`p-1 rounded hover:bg-slate-100 ${sortValue === 'alpha' ? 'text-indigo-600' : 'text-slate-400'}`} title="Sort Alpha"><ArrowUpDown className="w-3 h-3" /></button>
+                    <button onClick={() => setSort('invDesc')} className={`p-1 rounded hover:bg-slate-100 ${sortValue === 'invDesc' ? 'text-indigo-600' : 'text-slate-400'}`} title="Sort Inv"><Activity className="w-3 h-3" /></button>
+                </div>
+            </div>
+            <div className="relative mb-2">
+                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-slate-400" />
+                <input 
+                    type="text" 
+                    className="w-full pl-7 pr-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 bg-white"
+                    placeholder="Search Item..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+            {/* Header Extras (like filters) */}
+            {children}
+        </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin scrollbar-thumb-slate-200">
+            {items.length > 0 ? items.map(node => (
+                // NodeCard is memoized, so scrolling is efficient
+                <React.Fragment key={node.id}>
+                   {/* Props passed via RenderColumn's parent mapping logic */}
+                   {/* But RenderColumn receives `items` which are objects. 
+                       We need to render them. Since RenderColumn is generic, 
+                       we expect items to be fully formed or pass a render prop. 
+                       To keep it simple given previous code structure: */}
+                   {node.component} 
+                </React.Fragment>
+            )) : <div className="text-xs text-center text-slate-400 py-8 italic">No items found</div>}
+        </div>
+    </div>
+));
+
 
 // --- Supply Chain Network Map Component (HIGHLY OPTIMIZED) ---
 const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRange, onOpenDetails }) => {
@@ -288,6 +334,9 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
     const [searchTermFG, setSearchTermFG] = useState("");
     const [sortRM, setSortRM] = useState("alpha"); 
     const [sortFG, setSortFG] = useState("alpha"); 
+    
+    // NEW: RM Class Filter State
+    const [rmClassFilter, setRmClassFilter] = useState('All');
 
     // Sync parent selection
     useEffect(() => {
@@ -300,7 +349,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         }
     }, [selectedItemFromParent]);
 
-    // 1. PERFORMANCE FIX: Create Index (O(N)) once
+    // 1. Index Data
     const dataIndex = useMemo(() => {
         const idx = {};
         const rms = new Set();
@@ -311,14 +360,13 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
             if (!idx[code]) idx[code] = [];
             idx[code].push(row);
             
-            // Identify Type efficiently
             if (row.Type === 'RM') rms.add(code);
             else if (row.Type === 'FG') fgs.add(code);
         });
         return { index: idx, rmIds: Array.from(rms), fgIds: Array.from(fgs) };
     }, [inventoryData]);
 
-    // 2. PERFORMANCE FIX: Index BOM (O(N)) once
+    // 2. Index BOM
     const bomIndex = useMemo(() => {
         const p2c = {}; // Parent -> Children
         const c2p = {}; // Child -> Parents
@@ -333,28 +381,23 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         return { p2c, c2p };
     }, [bomData]);
 
-    // 3. PERFORMANCE FIX: Optimized Stat Calculation (O(1) lookup)
-    const getNodeStats = (itemCode, type) => {
+    // 3. Get Stats
+    const getNodeStats = useCallback((itemCode, type) => {
         const records = dataIndex.index[itemCode];
         if (!records) return null;
 
-        // Optimization: Grab first record to get static details (Inv Org)
-        // In real world, handling multiple orgs per item requires aggregation, 
-        // but keeping it simple as per original logic for speed.
         const firstRec = records[0];
         const invOrg = firstRec['Inv Org'];
+        const itemClass = firstRec['Item Class']; // Capture Class
 
-        // Apply Date Filtering ONLY on relevant records (Tiny subset)
         const validRecords = records.filter(d => 
             (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
             (!dateRange.end || d._dateObj <= new Date(dateRange.end))
         );
 
-        // Calculate Weekly Health
         const weeklyMap = {};
         validRecords.forEach(r => {
             if (r.Metric === 'Tot.Inventory (Forecast)' || r.Metric === 'Tot.Target Inv.') {
-                // Fast week calc
                 const weekNum = Math.floor(r._dateObj.getTime() / (7 * 24 * 60 * 60 * 1000));
                 if (!weeklyMap[weekNum]) weeklyMap[weekNum] = { inv: 0, target: 0, count: 0 };
                 
@@ -375,8 +418,6 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
             return { week: w, pct: avgTarget > 0 ? (avgInv / avgTarget) * 100 : 0 };
         });
 
-        // Current Inventory (Latest Date)
-        // Filter only inventory rows first to sort less
         const invRows = validRecords.filter(r => r.Metric === 'Tot.Inventory (Forecast)');
         invRows.sort((a,b) => b._dateObj - a._dateObj);
         const currentInv = invRows.length > 0 ? invRows[0].Value : 0;
@@ -386,40 +427,42 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
             id: itemCode,
             itemCode: itemCode,
             invOrg: invOrg,
+            itemClass: itemClass,
             type,
             status,
             currentInv,
             weeklyHealth
         };
-    };
+    }, [dataIndex, dateRange]);
 
-    // 4. Generate Lists (Fast)
+    // 4. Generate Lists (With Render Component Injection)
     const { rmList, fgList } = useMemo(() => {
         let targetRMs = dataIndex.rmIds;
         let targetFGs = dataIndex.fgIds;
 
-        // Filter by Map Interaction (O(1) Set lookup)
         if (mapFocus) {
             if (mapFocus.type === 'FG') {
                 const children = bomIndex.p2c[mapFocus.id];
                 if (children) targetRMs = targetRMs.filter(id => children.has(id));
-                else targetRMs = []; // No ingredients
+                else targetRMs = []; 
             } else if (mapFocus.type === 'RM') {
                 const parents = bomIndex.c2p[mapFocus.id];
                 if (parents) targetFGs = targetFGs.filter(id => parents.has(id));
-                else targetFGs = []; // No consumers
+                else targetFGs = []; 
             }
         }
 
-        // Search Filter
         if (searchTermRM) targetRMs = targetRMs.filter(id => id.toLowerCase().includes(searchTermRM.toLowerCase()));
         if (searchTermFG) targetFGs = targetFGs.filter(id => id.toLowerCase().includes(searchTermFG.toLowerCase()));
 
-        // Hydrate Nodes (Lazy Map)
         let rmNodes = targetRMs.map(id => getNodeStats(id, 'RM')).filter(Boolean);
         let fgNodes = targetFGs.map(id => getNodeStats(id, 'FG')).filter(Boolean);
 
-        // Sort
+        // NEW: Filter by RM Class (FA, AD, LI)
+        if (rmClassFilter !== 'All') {
+            rmNodes = rmNodes.filter(n => n.itemClass && n.itemClass.includes(rmClassFilter));
+        }
+
         const sorter = (a, b, method) => {
             if (method === 'alpha') return a.id.localeCompare(b.id);
             if (method === 'invDesc') return b.currentInv - a.currentInv;
@@ -428,48 +471,26 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         rmNodes.sort((a, b) => sorter(a, b, sortRM));
         fgNodes.sort((a, b) => sorter(a, b, sortFG));
 
-        return { rmList: rmNodes, fgList: fgNodes };
+        // Decorate nodes with Render Logic for RenderColumn to use
+        const wrapNode = (n) => ({
+            id: n.id, // Key
+            component: (
+                <NodeCard 
+                    key={n.id} 
+                    node={n} 
+                    isActive={mapFocus && mapFocus.id === n.id}
+                    onSelect={() => setMapFocus(n)}
+                    onOpenDetail={onOpenDetails}
+                />
+            )
+        });
 
-    }, [dataIndex, bomIndex, mapFocus, searchTermRM, searchTermFG, sortRM, sortFG, dateRange]);
+        return { 
+            rmList: rmNodes.map(wrapNode), 
+            fgList: fgNodes.map(wrapNode) 
+        };
 
-    // --- Render Column Helper ---
-    const RenderColumn = ({ title, count, items, type, searchTerm, setSearchTerm, setSort, sortValue, isActiveCol }) => (
-        <div className={`flex flex-col h-full border-r border-slate-200 bg-slate-50/30 ${isActiveCol ? 'bg-indigo-50/30' : ''} min-w-[280px] max-w-[320px]`}>
-            <div className="p-3 border-b border-slate-200 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
-                <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                        {type === 'RM' ? <Box className="w-3 h-3" /> : <Factory className="w-3 h-3" />}
-                        {title} <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md text-[10px]">{count}</span>
-                    </h3>
-                    <div className="flex gap-1">
-                        <button onClick={() => setSort('alpha')} className={`p-1 rounded hover:bg-slate-100 ${sortValue === 'alpha' ? 'text-indigo-600' : 'text-slate-400'}`} title="Sort Alpha"><ArrowUpDown className="w-3 h-3" /></button>
-                        <button onClick={() => setSort('invDesc')} className={`p-1 rounded hover:bg-slate-100 ${sortValue === 'invDesc' ? 'text-indigo-600' : 'text-slate-400'}`} title="Sort Inv"><Activity className="w-3 h-3" /></button>
-                    </div>
-                </div>
-                <div className="relative">
-                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-slate-400" />
-                    <input 
-                        type="text" 
-                        className="w-full pl-7 pr-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 bg-white"
-                        placeholder="Search Item..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin scrollbar-thumb-slate-200">
-                {items.length > 0 ? items.map(node => (
-                    <NodeCard 
-                        key={node.id} 
-                        node={node} 
-                        isActive={mapFocus && mapFocus.id === node.id}
-                        onSelect={() => setMapFocus(node)}
-                        onOpenDetail={onOpenDetails}
-                    />
-                )) : <div className="text-xs text-center text-slate-400 py-8 italic">No items found</div>}
-            </div>
-        </div>
-    );
+    }, [dataIndex, bomIndex, mapFocus, searchTermRM, searchTermFG, sortRM, sortFG, dateRange, getNodeStats, onOpenDetails, rmClassFilter]);
 
     return (
         <div className="flex h-[500px] overflow-hidden bg-white rounded-xl border border-slate-200 shadow-inner">
@@ -484,7 +505,23 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
                 sortValue={sortRM}
                 setSort={setSortRM}
                 isActiveCol={mapFocus && mapFocus.type === 'RM'}
-            />
+            >
+                {/* NEW: Filter Buttons */}
+                <div className="flex gap-1 mt-1 overflow-x-auto pb-1">
+                    {['All', 'FA', 'AD', 'LI'].map(cls => (
+                        <button 
+                            key={cls}
+                            onClick={() => setRmClassFilter(cls)}
+                            className={`text-[10px] px-2 py-1 rounded-full border transition-colors whitespace-nowrap
+                                ${rmClassFilter === cls 
+                                    ? 'bg-indigo-100 border-indigo-200 text-indigo-700 font-bold' 
+                                    : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-200'}`}
+                        >
+                            {cls}
+                        </button>
+                    ))}
+                </div>
+            </RenderColumn>
 
             {/* FG Column */}
             <RenderColumn 
@@ -529,7 +566,7 @@ export default function SupplyChainDashboard() {
         metric: ['All']
     });
     const [isLeadTimeMode, setIsLeadTimeMode] = useState(false);
-    const [viewMode, setViewMode] = useState('risk');
+    const [viewMode, setViewMode] = useState('risk'); 
     const [selectedItem, setSelectedItem] = useState(null);
     const [hoveredDate, setHoveredDate] = useState(null);
     const [riskFilters, setRiskFilters] = useState({
