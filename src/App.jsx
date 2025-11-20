@@ -3,7 +3,7 @@ import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine
 } from 'recharts';
 import {
-    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square
+    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers
 } from 'lucide-react';
 
 // --- Helper for CSV Parsing ---
@@ -69,6 +69,31 @@ NR,RM,BAB250-MR1,THRYPM,MR,LM,NST(MTS),BAB250-MR1/THRYPM/MR/LM/NST(MTS),Tot.Inve
 NR,RM,BAB250-MR1,THRYPM,MR,LM,NST(MTS),BAB250-MR1/THRYPM/MR/LM/NST(MTS),Indep. Req. (Forecast),0,12/18/2025,150
 NR,RM,BAB250-MR1,THRYPM,MR,LM,NST(MTS),BAB250-MR1/THRYPM/MR/LM/NST(MTS),Tot.Inventory (Forecast),0,12/18/2025,100`;
 
+// --- Custom Tooltip Component ---
+const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-white/95 backdrop-blur-sm p-4 rounded-xl shadow-xl border border-slate-100 text-sm">
+                <p className="font-semibold text-slate-800 mb-2">{new Date(label).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</p>
+                <div className="space-y-1">
+                    {payload.map((entry, index) => (
+                        <div key={index} className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                                <span className="text-slate-500 text-xs">{entry.name}</span>
+                            </div>
+                            <span className="font-mono font-medium text-slate-700">
+                                {entry.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+    return null;
+};
+
 // --- Components ---
 
 const SearchableSelect = ({ label, value, options, onChange, multi = false }) => {
@@ -118,27 +143,30 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false }) =>
     };
 
     return (
-        <div className="relative" ref={wrapperRef}>
-            <label className="block text-sm font-medium text-slate-500 mb-1">{label}</label>
+        <div className="relative group" ref={wrapperRef}>
+            <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">{label}</label>
             <button
-                className="w-full bg-white rounded-lg border border-slate-300 px-3 py-2 text-sm flex items-center justify-between cursor-pointer hover:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className={`w-full bg-white rounded-xl border px-4 py-2.5 text-sm flex items-center justify-between cursor-pointer transition-all duration-200 ease-in-out
+                    ${isOpen ? 'border-indigo-500 ring-2 ring-indigo-100 shadow-md' : 'border-slate-200 hover:border-indigo-300 hover:shadow-sm'}`}
                 onClick={() => {
                     if (!isOpen) setSearchTerm("");
                     setIsOpen(!isOpen);
                 }}
             >
-                <span className="truncate block text-slate-700 max-w-[180px] text-left">{getDisplayText()}</span>
-                <ChevronDown className="w-4 h-4 text-slate-400 ml-2 flex-shrink-0" />
+                <span className={`truncate block max-w-[180px] text-left font-medium ${value === 'All' || (multi && value.includes('All')) ? 'text-slate-500' : 'text-slate-800'}`}>
+                    {getDisplayText()}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isOpen && (
-                <div className="absolute z-50 w-full mt-1 bg-white rounded-lg shadow-xl border border-slate-200 max-h-60 flex flex-col animate-in fade-in zoom-in-95 duration-100">
-                    <div className="p-2 border-b border-slate-100 sticky top-0 bg-white rounded-t-lg">
+                <div className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-2xl border border-slate-100 max-h-64 flex flex-col animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+                    <div className="p-2 border-b border-slate-50 bg-slate-50/50">
                         <div className="relative">
-                            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-slate-400" />
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                             <input
                                 type="text"
-                                className="w-full pl-7 pr-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-slate-50"
+                                className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white"
                                 placeholder="Search..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -148,12 +176,15 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false }) =>
                         </div>
                     </div>
 
-                    <div className="overflow-y-auto flex-1 py-1">
+                    <div className="overflow-y-auto flex-1 py-1 scrollbar-thin scrollbar-thumb-slate-200">
                         {filteredOptions.length > 0 ? (
                             filteredOptions.map(opt => (
                                 <div
                                     key={opt}
-                                    className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 text-slate-700 flex items-center justify-between ${value === opt || (multi && value.includes(opt)) ? 'bg-blue-50 font-medium text-blue-700' : ''}`}
+                                    className={`px-4 py-2.5 text-sm cursor-pointer flex items-center justify-between transition-colors
+                                        ${value === opt || (multi && value.includes(opt)) 
+                                            ? 'bg-indigo-50/80 text-indigo-700 font-medium' 
+                                            : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'}`}
                                     onClick={(e) => {
                                         if (multi) {
                                             e.stopPropagation();
@@ -167,13 +198,13 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false }) =>
                                     <span className="truncate">{opt}</span>
                                     {multi && (
                                         (value.includes(opt))
-                                            ? <CheckSquare className="w-4 h-4 text-blue-600" />
+                                            ? <CheckSquare className="w-4 h-4 text-indigo-600" />
                                             : <Square className="w-4 h-4 text-slate-300" />
                                     )}
                                 </div>
                             ))
                         ) : (
-                            <div className="px-3 py-2 text-sm text-slate-400 text-center">No results</div>
+                            <div className="px-4 py-3 text-sm text-slate-400 text-center italic">No results</div>
                         )}
                     </div>
                 </div>
@@ -367,7 +398,7 @@ export default function SupplyChainDashboard() {
 
                 let status = null;
                 if ((totReq + indepReq) > inventory) {
-                     status = 'Critical';
+                      status = 'Critical';
                 } else if (inventory < targetInv && (totReq + indepReq) <= 0.001) {
                     status = 'Watch Out';
                 }
@@ -481,7 +512,7 @@ export default function SupplyChainDashboard() {
         return filters.metric;
     }, [filteredData, filters.metric]);
 
-    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+    const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
     const resetFilters = () => {
         setIsLeadTimeMode(false);
@@ -523,21 +554,25 @@ export default function SupplyChainDashboard() {
         return { left: `${left}%`, width: `${width}%` };
     };
 
-    const Y_AXIS_WIDTH = 180; 
+    const Y_AXIS_WIDTH = 200; 
 
     return (
-        <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
-             <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
+        <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20 selection:bg-indigo-100 selection:text-indigo-800">
+            {/* Header */}
+             <header className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-40 transition-all duration-300">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                        <div className="bg-blue-600 p-2 rounded-lg">
+                        <div className="bg-indigo-600 p-2.5 rounded-xl shadow-lg shadow-indigo-500/20">
                             <Package className="w-5 h-5 text-white" />
                         </div>
-                        <h1 className="text-xl font-bold text-slate-800">Supply Chain Analytics</h1>
+                        <div>
+                            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Supply Chain <span className="text-indigo-600">Analytics</span></h1>
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Inventory Intelligence</p>
+                        </div>
                     </div>
                     <div className="flex items-center space-x-4">
-                        <label className="flex items-center px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer transition-colors text-sm font-medium">
-                            <Upload className="w-4 h-4 mr-2" />
+                        <label className="group flex items-center px-4 py-2 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-600 hover:text-indigo-700 rounded-xl cursor-pointer transition-all duration-200 text-sm font-medium shadow-sm">
+                            <Upload className="w-4 h-4 mr-2 group-hover:-translate-y-0.5 transition-transform" />
                             Import CSV
                             <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
                         </label>
@@ -545,42 +580,79 @@ export default function SupplyChainDashboard() {
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
                 {/* Filters Container */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
-                    <div className="flex items-center justify-between mb-6">
-                        <div className="flex items-center space-x-2 text-slate-800">
-                            <Filter className="w-5 h-5 text-blue-600" />
-                            <h2 className="font-semibold text-lg">Global Filters</h2>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 md:p-8 transition-shadow hover:shadow-md">
+                    <div className="flex items-center justify-between mb-8">
+                        <div className="flex items-center space-x-3 text-slate-800">
+                            <div className="p-2 bg-blue-50 rounded-lg">
+                                <Filter className="w-5 h-5 text-indigo-600" />
+                            </div>
+                            <div>
+                                <h2 className="font-bold text-lg tracking-tight">Global Filters</h2>
+                                <p className="text-sm text-slate-500">Refine data points across all charts</p>
+                            </div>
                         </div>
-                        <button onClick={resetFilters} className="text-sm text-blue-600 hover:text-blue-800 font-medium hover:underline">Reset All</button>
+                        <button onClick={resetFilters} className="text-sm px-4 py-2 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 font-medium transition-colors">
+                            Reset Defaults
+                        </button>
                     </div>
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6 pb-6 border-b border-slate-100">
-                         <div className="lg:col-span-1 flex flex-col justify-end pb-1">
+                    
+                    {/* Primary Controls Row */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8 pb-8 border-b border-slate-100">
+                         <div className="lg:col-span-3 flex flex-col justify-end">
+                            <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Analysis Mode</label>
                             <button
                                 onClick={() => setIsLeadTimeMode(!isLeadTimeMode)}
-                                className={`flex items-center justify-between w-full px-4 py-2 rounded-lg border transition-all ${isLeadTimeMode ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-300 text-slate-600'}`}
+                                className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl border transition-all duration-200 ${
+                                    isLeadTimeMode 
+                                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm' 
+                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                }`}
                             >
                                 <span className="text-sm font-medium flex items-center">
-                                    <Clock className={`w-4 h-4 mr-2 ${isLeadTimeMode ? 'text-blue-600' : 'text-slate-400'}`} />
+                                    <Clock className={`w-4 h-4 mr-2.5 ${isLeadTimeMode ? 'text-indigo-600' : 'text-slate-400'}`} />
                                     Inside Lead Time ONLY
                                 </span>
-                                {isLeadTimeMode ? <ToggleRight className="w-6 h-6 text-blue-600" /> : <ToggleLeft className="w-6 h-6 text-slate-400" />}
+                                {isLeadTimeMode ? <ToggleRight className="w-6 h-6 text-indigo-600" /> : <ToggleLeft className="w-6 h-6 text-slate-300" />}
                             </button>
                         </div>
-                        <div className="lg:col-span-1">
-                            <label className="block text-sm font-medium text-slate-500 mb-1">Start Date</label>
-                            <input type="date" disabled={isLeadTimeMode} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={dateRange.start} onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))} />
+                        
+                        <div className="lg:col-span-3">
+                            <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Start Date</label>
+                            <div className="relative">
+                                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                                <input 
+                                    type="date" 
+                                    disabled={isLeadTimeMode} 
+                                    className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white transition-all text-slate-700 disabled:bg-slate-50 disabled:text-slate-400" 
+                                    value={dateRange.start} 
+                                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))} 
+                                />
+                            </div>
                         </div>
-                        <div className="lg:col-span-1">
-                            <label className="block text-sm font-medium text-slate-500 mb-1">End Date</label>
-                            <input type="date" disabled={isLeadTimeMode} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={dateRange.end} onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))} />
+
+                        <div className="lg:col-span-3">
+                             <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">End Date</label>
+                             <div className="relative">
+                                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                                <input 
+                                    type="date" 
+                                    disabled={isLeadTimeMode} 
+                                    className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white transition-all text-slate-700 disabled:bg-slate-50 disabled:text-slate-400" 
+                                    value={dateRange.end} 
+                                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))} 
+                                />
+                            </div>
                         </div>
-                        <div className="lg:col-span-1">
-                            <SearchableSelect label="Chart Metrics Only" value={filters.metric} options={options.metrics} onChange={(val) => setFilters(prev => ({ ...prev, metric: val }))} multi={true} />
+
+                        <div className="lg:col-span-3">
+                            <SearchableSelect label="Displayed Metrics" value={filters.metric} options={options.metrics} onChange={(val) => setFilters(prev => ({ ...prev, metric: val }))} multi={true} />
                         </div>
                     </div>
+
+                    {/* Attribute Filters */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                         <SearchableSelect label="Item Code" value={filters.itemCode} options={options.itemCodes} onChange={(val) => setFilters(prev => ({ ...prev, itemCode: val }))} />
                         <SearchableSelect label="Inv Org" value={filters.invOrg} options={options.invOrgs} onChange={(val) => setFilters(prev => ({ ...prev, invOrg: val }))} />
@@ -591,128 +663,162 @@ export default function SupplyChainDashboard() {
                 </div>
 
                 {/* Chart Section */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-2 relative z-10">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-bold text-slate-800">
-                            {selectedItem ? `Trend: ${selectedItem.itemCode} (${selectedItem.invOrg})` : "Aggregate Trends"}
-                        </h2>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 md:p-8 relative z-10">
+                    <div className="flex items-center justify-between mb-8">
+                        <div className="flex items-center space-x-3">
+                            <div className="p-2 bg-emerald-50 rounded-lg">
+                                <Activity className="w-5 h-5 text-emerald-600" />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+                                    {selectedItem ? `Trend: ${selectedItem.itemCode}` : "Aggregate Trends"}
+                                </h2>
+                                {selectedItem && <p className="text-sm text-slate-500">{selectedItem.invOrg}</p>}
+                            </div>
+                        </div>
                     </div>
-                    <div className="h-64 w-full">
+                    
+                    <div className="h-[400px] w-full">
                         {chartData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart 
                                     data={chartData} 
-                                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                                    margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
                                     onMouseMove={(e) => {
                                         if (e && e.activeLabel) setHoveredDate(e.activeLabel);
                                     }}
                                     onMouseLeave={() => setHoveredDate(null)}
                                 >
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                    <defs>
+                                        {colors.map((color, index) => (
+                                            <linearGradient key={index} id={`color${index}`} x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor={color} stopOpacity={0.3}/>
+                                                <stop offset="95%" stopColor={color} stopOpacity={0}/>
+                                            </linearGradient>
+                                        ))}
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                     <XAxis
                                         dataKey="date"
-                                        stroke="#64748b"
+                                        stroke="#94a3b8"
                                         fontSize={12}
-                                        tickMargin={10}
+                                        tickMargin={15}
+                                        tickLine={false}
+                                        axisLine={false}
                                         tickFormatter={(str) => {
                                             const date = new Date(str);
                                             return `${date.getMonth() + 1}/${date.getDate()}`;
                                         }}
                                     />
-                                    <YAxis stroke="#64748b" fontSize={12} width={Y_AXIS_WIDTH - 20} />
-                                    <Tooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
-                                    {hoveredDate && (
-                                        <ReferenceLine x={hoveredDate} stroke="#3b82f6" strokeDasharray="3 3" />
-                                    )}
-                                    <Legend />
+                                    <YAxis 
+                                        stroke="#94a3b8" 
+                                        fontSize={12} 
+                                        width={60} 
+                                        tickLine={false}
+                                        axisLine={false}
+                                        tickFormatter={(value) => {
+                                            if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+                                            return value;
+                                        }}
+                                    />
+                                    <Tooltip content={<CustomTooltip />} />
+                                    <Legend iconType="circle" wrapperStyle={{paddingTop: '20px'}}/>
                                     {activeMetrics.map((metric, index) => (
                                         <Area
                                             key={metric}
                                             type="monotone"
                                             dataKey={metric}
                                             stroke={colors[index % colors.length]}
-                                            fill={colors[index % colors.length]}
-                                            fillOpacity={0.1}
+                                            fill={`url(#color${index % colors.length})`}
+                                            fillOpacity={1}
                                             strokeWidth={2}
+                                            activeDot={{ r: 6, strokeWidth: 0 }}
                                         />
                                     ))}
                                 </AreaChart>
                             </ResponsiveContainer>
                         ) : (
-                            <div className="h-full flex items-center justify-center text-slate-400">No data for chart</div>
+                            <div className="h-full flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                                <Layers className="w-10 h-10 mb-2 opacity-50" />
+                                <p>No chart data available for current filters</p>
+                            </div>
                         )}
                     </div>
                 </div>
 
                 {/* Gantt Section */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col mb-8">
-                    <div className="p-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 rounded-t-xl">
-                        <div className="flex items-center space-x-2">
-                            <AlertTriangle className="w-5 h-5 text-slate-800" />
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 flex flex-col overflow-hidden">
+                    <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
+                        <div className="flex items-center space-x-3">
+                            <div className="p-2 bg-amber-50 rounded-lg">
+                                <AlertTriangle className="w-5 h-5 text-amber-600" />
+                            </div>
                             <div>
-                                <h2 className="text-lg font-bold text-slate-800">Risk Monitor</h2>
-                                <p className="text-xs text-slate-500">Visual timeline of critical events</p>
+                                <h2 className="text-lg font-bold text-slate-900 tracking-tight">Risk Monitor</h2>
+                                <p className="text-sm text-slate-500">Timeline of projected shortages</p>
                             </div>
                         </div>
                         
-                        <div className="flex flex-wrap items-center gap-4 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+                        <div className="flex flex-wrap items-center gap-4 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
                             {/* Sorting Dropdown */}
-                            <div className="flex items-center space-x-2 border-r border-slate-200 pr-4">
-                                <ArrowUpDown className="w-4 h-4 text-slate-400" />
+                            <div className="flex items-center space-x-2 border-r border-slate-100 pr-4 pl-2">
+                                <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
                                 <select 
-                                    className="text-sm border-none focus:ring-0 text-slate-700 font-medium cursor-pointer bg-transparent"
+                                    className="text-sm border-none focus:ring-0 text-slate-600 font-medium cursor-pointer bg-transparent py-1 pr-8"
                                     value={ganttSort}
                                     onChange={(e) => setGanttSort(e.target.value)}
                                 >
                                     <option value="itemCode">Sort by Name</option>
                                     <option value="leadTime">Inside Lead Time First</option>
                                     <option value="duration">Shortage Duration</option>
-                                    <option value="planning">Planning Priority (Outside LT)</option>
+                                    <option value="planning">Planning Priority</option>
                                 </select>
                             </div>
 
                             {/* Min Days Input */}
-                             <div className="flex items-center space-x-2 border-r border-slate-200 pr-4">
-                                <label className="text-xs text-slate-500 font-medium">Min Consec. Days:</label>
+                             <div className="flex items-center space-x-2 border-r border-slate-100 pr-4">
+                                <label className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Min Days</label>
                                 <input 
                                     type="number" 
                                     min="1"
-                                    className="w-16 px-2 py-1 text-sm border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-14 px-2 py-1 text-sm border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 text-center font-medium"
                                     value={riskFilters.minDays}
                                     onChange={(e) => setRiskFilters(p => ({...p, minDays: parseInt(e.target.value) || 1}))}
                                 />
                             </div>
 
-                            <label className="flex items-center space-x-2 cursor-pointer text-sm select-none">
-                                <input type="checkbox" checked={riskFilters.critical} onChange={e => setRiskFilters(p => ({...p, critical: e.target.checked}))} className="rounded text-red-600 focus:ring-red-500" />
-                                <span className="text-slate-700 flex items-center font-medium"><div className="w-2 h-2 rounded-full bg-red-500 mr-1.5"></div>Critical</span>
-                            </label>
-                            <label className="flex items-center space-x-2 cursor-pointer text-sm select-none">
-                                <input type="checkbox" checked={riskFilters.watchOut} onChange={e => setRiskFilters(p => ({...p, watchOut: e.target.checked}))} className="rounded text-yellow-500 focus:ring-yellow-500" />
-                                <span className="text-slate-700 flex items-center font-medium"><div className="w-2 h-2 rounded-full bg-yellow-400 mr-1.5"></div>Watch Out</span>
-                            </label>
+                            <div className="flex items-center space-x-4 px-2">
+                                <label className="flex items-center space-x-2 cursor-pointer group">
+                                    <input type="checkbox" checked={riskFilters.critical} onChange={e => setRiskFilters(p => ({...p, critical: e.target.checked}))} className="rounded text-red-500 focus:ring-red-500 border-slate-300" />
+                                    <span className="text-sm text-slate-600 group-hover:text-slate-900 font-medium transition-colors">Critical</span>
+                                </label>
+                                <label className="flex items-center space-x-2 cursor-pointer group">
+                                    <input type="checkbox" checked={riskFilters.watchOut} onChange={e => setRiskFilters(p => ({...p, watchOut: e.target.checked}))} className="rounded text-amber-400 focus:ring-amber-400 border-slate-300" />
+                                    <span className="text-sm text-slate-600 group-hover:text-slate-900 font-medium transition-colors">Watch Out</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="flex flex-col h-[500px]">
-                        <div className="overflow-y-auto flex-1 relative">
+                    <div className="flex flex-col h-[500px] bg-white">
+                        <div className="overflow-y-auto flex-1 relative scrollbar-thin scrollbar-thumb-slate-200">
                             {ganttData.length > 0 ? (
                                 ganttData.map((row, idx) => (
                                     <div 
                                         key={idx} 
-                                        className={`flex items-center border-b border-slate-100 h-12 group transition-colors ${
+                                        className={`flex items-center border-b border-slate-50 h-14 group transition-all duration-200 ${
                                             selectedItem && selectedItem.itemCode === row.itemCode && selectedItem.invOrg === row.invOrg 
-                                            ? 'bg-blue-50 border-blue-200' 
+                                            ? 'bg-indigo-50/60' 
                                             : 'hover:bg-slate-50'
                                         }`}
                                     >
                                         <div 
-                                            className="flex-shrink-0 px-4 py-2 border-r border-slate-100 truncate cursor-pointer"
+                                            className="flex-shrink-0 px-6 py-2 border-r border-slate-50 truncate cursor-pointer h-full flex flex-col justify-center"
                                             style={{ width: Y_AXIS_WIDTH }}
                                             onClick={() => setSelectedItem(row)}
                                         >
-                                            <div className="font-bold text-slate-700 text-sm truncate group-hover:text-blue-600">{row.itemCode}</div>
-                                            <div className="text-xs text-slate-400">{row.invOrg}</div>
+                                            <div className="font-bold text-slate-700 text-sm truncate group-hover:text-indigo-600 transition-colors">{row.itemCode}</div>
+                                            <div className="text-xs text-slate-400 font-mono mt-0.5">{row.invOrg}</div>
                                         </div>
 
                                         <div 
@@ -720,25 +826,33 @@ export default function SupplyChainDashboard() {
                                             style={{ marginLeft: '20px', marginRight: '30px' }}
                                             onClick={() => setSelectedItem(row)}
                                         >
-                                            <div className="absolute inset-0 flex opacity-50">
-                                                <div className="w-1/4 border-r border-slate-50 h-full"></div>
-                                                <div className="w-1/4 border-r border-slate-50 h-full"></div>
-                                                <div className="w-1/4 border-r border-slate-50 h-full"></div>
+                                            <div className="absolute inset-0 flex opacity-30 pointer-events-none">
+                                                <div className="w-1/4 border-r border-slate-100 h-full"></div>
+                                                <div className="w-1/4 border-r border-slate-100 h-full"></div>
+                                                <div className="w-1/4 border-r border-slate-100 h-full"></div>
                                             </div>
 
                                             {row.blocks.map((block, bIdx) => {
                                                 const style = getGanttStyles(block.start, block.end);
-                                                const colorClass = block.status === 'Critical' ? 'bg-red-500/90 border border-red-600' : 'bg-yellow-400/90 border border-yellow-500';
+                                                const isCritical = block.status === 'Critical';
+                                                const colorClass = isCritical 
+                                                    ? 'bg-gradient-to-r from-red-500 to-red-600 shadow-red-200' 
+                                                    : 'bg-gradient-to-r from-amber-400 to-amber-500 shadow-amber-200';
+                                                
                                                 return (
                                                     <div 
-                                                        key={bIdx}
-                                                        className={`absolute h-5 top-3.5 rounded-sm shadow-sm cursor-pointer group/bar ${colorClass}`}
-                                                        style={style}
+                                                        key={bIdx} 
+                                                        className={`absolute h-6 top-4 rounded-full shadow-md cursor-pointer group/bar transition-transform hover:scale-y-110 hover:z-10 ${colorClass} ${isCritical ? 'animate-pulse-slow' : ''}`}
+                                                        style={{...style, minWidth: '12px'}}
                                                     >
-                                                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 hidden group-hover/bar:block bg-slate-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50 shadow-xl">
-                                                            <div className="font-bold">{block.status}</div>
-                                                            <div>{block.days} Days</div>
-                                                            <div className="text-slate-400 text-[10px]">{block.start.toLocaleDateString()} - {block.end.toLocaleDateString()}</div>
+                                                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover/bar:block bg-slate-900 text-white text-xs rounded-lg py-2 px-3 whitespace-nowrap z-50 shadow-xl">
+                                                            <div className="font-bold flex items-center gap-2">
+                                                                <div className={`w-2 h-2 rounded-full ${isCritical ? 'bg-red-400' : 'bg-amber-400'}`}></div>
+                                                                {block.status}
+                                                            </div>
+                                                            <div className="text-slate-300 mt-1">{block.days} Days Shortage</div>
+                                                            <div className="text-slate-500 text-[10px] mt-1 font-mono pt-1 border-t border-slate-700">{block.start.toLocaleDateString()} - {block.end.toLocaleDateString()}</div>
+                                                            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1 border-4 border-transparent border-t-slate-900"></div>
                                                         </div>
                                                     </div>
                                                 );
@@ -748,45 +862,50 @@ export default function SupplyChainDashboard() {
                                 ))
                             ) : (
                                 <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                                    <CheckSquare className="w-10 h-10 mb-2 text-slate-300" />
-                                    <p>No risks match the current filters.</p>
+                                    <CheckSquare className="w-12 h-12 mb-3 text-slate-200" />
+                                    <p className="text-sm font-medium">No risks match the current filters.</p>
                                 </div>
                             )}
                         </div>
                     </div>
                 </div>
 
-                {/* --- DETAIL VIEW (Wide Pivot Table) --- */}
+                {/* --- DETAIL VIEW (Floating Panel) --- */}
                 {selectedItem && selectedItemData && (
-                    <div className="fixed inset-x-0 bottom-0 z-50 bg-white border-t shadow-2xl transform transition-transform duration-300 ease-in-out h-96 flex flex-col">
-                        <div className="px-6 py-3 bg-slate-50 border-b flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                                <Table className="w-5 h-5 text-blue-600" />
+                    <div className="fixed inset-x-0 bottom-0 z-50 bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] transform transition-all duration-300 ease-in-out h-96 flex flex-col animate-in slide-in-from-bottom-10">
+                        <div className="px-6 py-4 bg-white/50 border-b border-slate-100 flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                                <div className="bg-indigo-100 p-2 rounded-lg">
+                                    <Table className="w-5 h-5 text-indigo-600" />
+                                </div>
                                 <div>
-                                    <h3 className="font-bold text-slate-800 text-lg">{selectedItem.itemCode}</h3>
-                                    <p className="text-xs text-slate-500">{selectedItem.invOrg} — {selectedItemData.dates.length} Days Visible</p>
+                                    <h3 className="font-bold text-slate-900 text-lg tracking-tight">{selectedItem.itemCode}</h3>
+                                    <p className="text-xs text-slate-500 font-medium font-mono uppercase tracking-wider">{selectedItem.invOrg} — {selectedItemData.dates.length} Days Visible</p>
                                 </div>
                             </div>
-                            <button onClick={() => setSelectedItem(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
-                                <X className="w-5 h-5 text-slate-500" />
+                            <button onClick={() => setSelectedItem(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors group">
+                                <X className="w-5 h-5 text-slate-400 group-hover:text-slate-600" />
                             </button>
                         </div>
                         
                         <div className="flex-1 overflow-auto p-0">
                             <table className="w-full text-sm text-left border-collapse relative">
-                                <thead className="text-xs text-slate-500 uppercase bg-slate-50 sticky top-0 z-10 shadow-sm">
+                                <thead className="text-xs text-slate-500 uppercase bg-slate-50/90 sticky top-0 z-10 font-semibold tracking-wider backdrop-blur-sm">
                                     <tr>
-                                        <th className="px-4 py-3 border-b bg-slate-50 left-0 sticky z-20 border-r w-48 shadow-sm">Metric</th>
+                                        <th className="px-6 py-3 border-b border-slate-200 left-0 sticky z-20 bg-slate-50 border-r shadow-[4px_0_24px_-2px_rgba(0,0,0,0.05)] w-64">Metric</th>
                                         {selectedItemData.dates.map(dateStr => {
                                             const d = new Date(dateStr);
                                             return (
                                                 <th 
                                                     key={dateStr} 
-                                                    className={`px-2 py-3 border-b text-center min-w-[60px] font-medium transition-colors cursor-default ${hoveredDate === dateStr ? 'bg-blue-100 text-blue-700' : ''}`}
+                                                    className={`px-3 py-3 border-b border-slate-200 text-center min-w-[80px] transition-colors cursor-default ${hoveredDate === dateStr ? 'bg-indigo-50 text-indigo-700' : ''}`}
                                                     onMouseEnter={() => setHoveredDate(dateStr)}
                                                     onMouseLeave={() => setHoveredDate(null)}
                                                 >
-                                                    {d.getMonth() + 1}/{d.getDate()}
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] opacity-70">{d.toLocaleString('default', { weekday: 'short' })}</span>
+                                                        <span>{d.getMonth() + 1}/{d.getDate()}</span>
+                                                    </div>
                                                 </th>
                                             );
                                         })}
@@ -794,20 +913,20 @@ export default function SupplyChainDashboard() {
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {selectedItemData.metrics.map(metric => (
-                                        <tr key={metric} className="hover:bg-blue-50/50 transition-colors">
-                                            <td className="px-4 py-2 font-medium text-slate-700 sticky left-0 bg-white border-r z-10 text-xs truncate max-w-[200px]" title={metric}>
+                                        <tr key={metric} className="hover:bg-slate-50/80 transition-colors group">
+                                            <td className="px-6 py-3 font-medium text-slate-600 sticky left-0 bg-white group-hover:bg-slate-50/80 border-r border-slate-100 z-10 text-xs truncate max-w-[250px] shadow-[4px_0_24px_-2px_rgba(0,0,0,0.05)]" title={metric}>
                                                 {metric}
                                             </td>
                                             {selectedItemData.dates.map(dateStr => {
                                                 const val = selectedItemData.values[metric]?.[dateStr];
-                                                let cellClass = "text-slate-500";
-                                                if (metric === 'Tot.Inventory (Forecast)' && val < 0) cellClass = "text-red-600 font-bold bg-red-50";
-                                                else if (val > 0) cellClass = "text-slate-800 font-medium";
+                                                let cellClass = "text-slate-400";
+                                                if (metric === 'Tot.Inventory (Forecast)' && val < 0) cellClass = "text-red-600 font-bold bg-red-50 ring-1 ring-inset ring-red-100";
+                                                else if (val > 0) cellClass = "text-slate-700 font-medium";
 
                                                 return (
                                                     <td 
                                                         key={dateStr} 
-                                                        className={`px-2 py-2 text-right border-r border-slate-50 transition-colors ${cellClass} ${hoveredDate === dateStr ? 'bg-blue-50' : ''}`}
+                                                        className={`px-3 py-2 text-right border-r border-slate-50 transition-colors font-mono text-xs ${cellClass} ${hoveredDate === dateStr ? 'bg-indigo-50' : ''}`}
                                                         onMouseEnter={() => setHoveredDate(dateStr)}
                                                         onMouseLeave={() => setHoveredDate(null)}
                                                     >
@@ -823,6 +942,16 @@ export default function SupplyChainDashboard() {
                     </div>
                 )}
             </main>
+            
+            <style jsx global>{`
+                @keyframes pulse-slow {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: .85; }
+                }
+                .animate-pulse-slow {
+                    animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+                }
+            `}</style>
         </div>
     );
 }
