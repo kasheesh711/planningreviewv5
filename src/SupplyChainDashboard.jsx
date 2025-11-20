@@ -3,8 +3,17 @@ import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine, ComposedChart
 } from 'recharts';
 import {
-    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, ArrowLeftRight, MapPin
+    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, ArrowLeftRight, MapPin, RefreshCw
 } from 'lucide-react';
+
+// --- CONFIGURATION: GOOGLE SHEETS ---
+// 1. Go to File > Share > Publish to Web
+// 2. Select the specific sheet tab and choose "Comma-separated values (.csv)"
+// 3. Paste the links below
+const GOOGLE_SHEET_CONFIG = {
+    INVENTORY_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSKllZddEROPOBe_19mUI94VuSl0QITEx1Z4EmvdN-ToaaTDGz1g1GDxst40rZAqP6w7b3yDSDqmpWB/pub?gid=0&single=true&output=csv", // e.g. "https://docs.google.com/spreadsheets/d/e/2PAC.../pub?output=csv"
+    BOM_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQwON2WzEI596aLH7oCBzoawdIL1TufE-Ta8GWpsj_D3xQOVggZMsFEl_l4pFzeFmvLPAbyS2AWSghV/pub?gid=106702660&single=true&output=csv"        // e.g. "https://docs.google.com/spreadsheets/d/e/2PAC.../pub?output=csv"
+};
 
 // --- Helper for CSV Parsing ---
 const parseCSV = (csvText) => {
@@ -55,7 +64,7 @@ const getLeadTimeWeeks = (invOrg) => {
     return 4;
 };
 
-// --- Sample Data ---
+// --- Sample Data (Fallback) ---
 const SAMPLE_CSV = `Factory,Type,Item Code,Inv Org,Item Class,UOM,Strategy,Original Item String,Metric,Start,Date,Value
 SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Req.,0,11/19/2025,9910.16
 SF,FG,AAG620-MR2,MYBGPM,MR,LM,MTS,AAG620-MR2/MYBGPM/MR/LM/MTS,Tot.Inventory (Forecast),0,11/19/2025,5000.00
@@ -238,7 +247,7 @@ const WeeklyHealthIndicator = React.memo(({ data }) => {
     );
 });
 
-// --- Node Card Component (UPDATED with Plant) ---
+// --- Node Card Component ---
 const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
     const statusColors = {
         'Critical': 'border-red-200 bg-red-50/50 hover:border-red-300',
@@ -260,7 +269,6 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
                     </span>
                     <div className="flex flex-col min-w-0">
                          <div className="text-xs font-bold text-slate-800 truncate max-w-[140px]" title={node.id}>{node.id}</div>
-                         {/* Display Plant / Inv Org */}
                          <div className="flex items-center text-[10px] text-slate-400">
                              <MapPin className="w-2.5 h-2.5 mr-0.5" />
                              {node.invOrg}
@@ -281,9 +289,7 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
                 {node.status === 'Critical' && <AlertTriangle className="w-3 h-3 text-red-500" />}
             </div>
 
-            {/* Weekly Health Bar */}
             <WeeklyHealthIndicator data={node.weeklyHealth} />
-            {/* Helper for Item Class Visibility */}
             {node.itemClass && <div className="text-[9px] text-slate-300 mt-1">{node.itemClass}</div>}
         </div>
     );
@@ -328,7 +334,6 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
 
 // --- Supply Chain Network Map Component ---
 const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRange, onOpenDetails }) => {
-    // Local State
     const [mapFocus, setMapFocus] = useState(null); 
     const [searchTermRM, setSearchTermRM] = useState("");
     const [searchTermFG, setSearchTermFG] = useState("");
@@ -336,10 +341,8 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
     const [sortFG, setSortFG] = useState("alpha"); 
     const [rmClassFilter, setRmClassFilter] = useState('All');
 
-    // Sync parent selection
     useEffect(() => {
         if (selectedItemFromParent) {
-            // AUTO-DETECT TYPE to prevent map breaking
             const match = inventoryData.find(d => d['Item Code'] === selectedItemFromParent.itemCode);
             const type = match ? match.Type : 'FG';
 
@@ -370,8 +373,8 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
     // 2. Index BOM
     const bomIndex = useMemo(() => {
-        const p2c = {}; // Parent -> Children
-        const c2p = {}; // Child -> Parents
+        const p2c = {}; 
+        const c2p = {}; 
         const parents = new Set();
         const children = new Set();
         
@@ -441,9 +444,9 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         };
     }, [dataIndex, dateRange]);
 
-    // 4. Generate Lists (UPDATED ORPHAN FILTERING)
+    // 4. Generate Lists
     const { rmList, fgList } = useMemo(() => {
-        // Filter 1: Must exist in BOM to show up in network map
+        // Filter 1: Must exist in BOM
         let targetRMs = dataIndex.rmIds.filter(id => bomIndex.children.has(id));
         let targetFGs = dataIndex.fgIds.filter(id => bomIndex.parents.has(id));
 
@@ -573,7 +576,7 @@ export default function SupplyChainDashboard() {
     const [isLeadTimeMode, setIsLeadTimeMode] = useState(false);
     const [viewMode, setViewMode] = useState('risk'); 
     const [selectedItem, setSelectedItem] = useState(null);
-    const [isDetailOpen, setIsDetailOpen] = useState(false); // New State for Table Visibility
+    const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [hoveredDate, setHoveredDate] = useState(null);
     const [riskFilters, setRiskFilters] = useState({
         critical: true,
@@ -581,6 +584,7 @@ export default function SupplyChainDashboard() {
         minDays: 1
     });
     const [ganttSort, setGanttSort] = useState('itemCode');
+    const [isLoading, setIsLoading] = useState(false);
 
     const handleDataLoad = (data) => {
         setRawData(data);
@@ -603,11 +607,54 @@ export default function SupplyChainDashboard() {
         }
     };
 
+    // --- Fetch from Google Sheets ---
     useEffect(() => {
-        const parsed = parseCSV(SAMPLE_CSV);
-        handleDataLoad(parsed);
+        const fetchData = async () => {
+            // Only fetch if URLs are configured
+            if (!GOOGLE_SHEET_CONFIG.INVENTORY_URL || !GOOGLE_SHEET_CONFIG.BOM_URL) {
+                const parsed = parseCSV(SAMPLE_CSV);
+                handleDataLoad(parsed);
+                return;
+            }
+
+            setIsLoading(true);
+            try {
+                const [invRes, bomRes] = await Promise.all([
+                    fetch(GOOGLE_SHEET_CONFIG.INVENTORY_URL),
+                    fetch(GOOGLE_SHEET_CONFIG.BOM_URL)
+                ]);
+
+                const invText = await invRes.text();
+                const bomText = await bomRes.text();
+
+                const invData = parseCSV(invText);
+                const bomParsed = parseCSV(bomText);
+
+                // BOM Processing
+                const processedBom = bomParsed.map(row => ({
+                    plant: row['Plant'] || row['Plant '],
+                    parent: row['Parent'] || row['Parent Item'] || row['Parent Item '],
+                    child: row['Child'] || row['Child Item'] || row['Child Item '],
+                    ratio: parseFloat(row['Ratio'] || row['Quantity Per'] || row['Quantity Per '] || row['qty'] || 0)
+                })).filter(row => row.parent && row.child);
+
+                handleDataLoad(invData);
+                setBomData(processedBom);
+                console.log("Loaded from Google Sheets");
+
+            } catch (error) {
+                console.error("Failed to load Google Sheets", error);
+                const parsed = parseCSV(SAMPLE_CSV);
+                handleDataLoad(parsed);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchData();
     }, []);
 
+    // --- Manual Uploads (Override) ---
     const handleInventoryUpload = (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -933,6 +980,11 @@ export default function SupplyChainDashboard() {
                                 <Factory className="w-3.5 h-3.5 mr-1.5" />Manufacturing
                             </button>
                         </div>
+                        {/* --- REFRESH BUTTON FOR GOOGLE SHEETS --- */}
+                        <button onClick={() => window.location.reload()} className="group flex items-center px-3 py-2 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-600 hover:text-indigo-700 rounded-xl cursor-pointer transition-all duration-200 text-sm font-medium shadow-sm" title="Reload Data">
+                             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                        </button>
+
                         <label className="group flex items-center px-4 py-2 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-600 hover:text-indigo-700 rounded-xl cursor-pointer transition-all duration-200 text-sm font-medium shadow-sm">
                             <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600 group-hover:-translate-y-0.5 transition-transform" />Import BOM<input type="file" accept=".csv" onChange={handleBomUpload} className="hidden" />
                         </label>
