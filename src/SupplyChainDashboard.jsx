@@ -1,15 +1,15 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
-    LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine, ComposedChart
+    LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine
 } from 'recharts';
 import {
-    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, ArrowLeftRight, MapPin, RefreshCw
+    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, MapPin, RefreshCw, RotateCcw
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
 const GOOGLE_SHEET_CONFIG = {
-    INVENTORY_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSe_LVLpnR6g1hDB3e9iulTyW6H-GZaDr0RbmOf0_ePIFcS8XnKFngsdZHKy_i4YSLpdLe6BMPAO9Av/pub?gid=1666488360&single=true&output=csv", // Paste your Published CSV Link here
-    BOM_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQwON2WzEI596aLH7oCBzoawdIL1TufE-Ta8GWpsj_D3xQOVggZMsFEl_l4pFzeFmvLPAbyS2AWSghV/pub?gid=106702660&single=true&output=csv"        // Paste your Published BOM CSV Link here
+    INVENTORY_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSe_LVLpnR6g1hDB3e9iulTyW6H-GZaDr0RbmOf0_ePIFcS8XnKFngsdZHKy_i4YSLpdLe6BMPAO9Av/pub?gid=1666488360&single=true&output=csv", 
+    BOM_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQwON2WzEI596aLH7oCBzoawdIL1TufE-Ta8GWpsj_D3xQOVggZMsFEl_l4pFzeFmvLPAbyS2AWSghV/pub?gid=106702660&single=true&output=csv"        
 };
 
 const PLANT_ORGS = ['THRYPM', 'MYBGPM'];
@@ -227,7 +227,7 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false }) =>
     );
 };
 
-// --- Weekly Health Indicator Component ---
+// --- Weekly Health Indicator ---
 const WeeklyHealthIndicator = React.memo(({ data }) => {
     if (!data || data.length === 0) return <div className="text-[10px] text-slate-400 mt-2">No forecast data</div>;
 
@@ -249,7 +249,7 @@ const WeeklyHealthIndicator = React.memo(({ data }) => {
     );
 });
 
-// --- Node Card Component ---
+// --- Node Card ---
 const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
     const statusColors = {
         'Critical': 'border-red-200 bg-red-50/50 hover:border-red-300',
@@ -333,10 +333,10 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
     </div>
 ));
 
-
 // --- Supply Chain Network Map Component ---
-const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRange, onOpenDetails }) => {
+const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRange, onOpenDetails, onNodeSelect }) => {
     const [mapFocus, setMapFocus] = useState(null); 
+    
     // List States
     const [searchTermRM, setSearchTermRM] = useState("");
     const [searchTermFG, setSearchTermFG] = useState("");
@@ -350,6 +350,15 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
     const [fgPlantFilter, setFgPlantFilter] = useState('All'); 
     const [dcFilter, setDcFilter] = useState('All'); 
 
+    // Reset Internal Map State
+    const handleReset = () => {
+        setMapFocus(null);
+        setSearchTermRM(""); setSearchTermFG(""); setSearchTermDC("");
+        setRmClassFilter('All'); setFgPlantFilter('All'); setDcFilter('All');
+        onNodeSelect(null); // Clear parent
+    };
+
+    // Sync parent selection
     useEffect(() => {
         if (selectedItemFromParent) {
             let type = 'FG';
@@ -357,13 +366,16 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
             else if (DC_ORGS.includes(selectedItemFromParent.invOrg)) type = 'DC';
             else type = 'RM'; 
 
-            setMapFocus({ 
-                type: type,
-                id: selectedItemFromParent.itemCode, 
-                invOrg: selectedItemFromParent.invOrg 
-            });
+            // Only update if different to prevent loops
+            if (!mapFocus || mapFocus.id !== selectedItemFromParent.itemCode) {
+                setMapFocus({ 
+                    type: type,
+                    id: selectedItemFromParent.itemCode, 
+                    invOrg: selectedItemFromParent.invOrg 
+                });
+            }
         }
-    }, [selectedItemFromParent, inventoryData]);
+    }, [selectedItemFromParent]);
 
     // 1. Index Data
     const dataIndex = useMemo(() => {
@@ -462,17 +474,15 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
     // 4. Generate Lists
     const { rmList, fgList, dcList } = useMemo(() => {
-        // Initial Keys: Unique Item+Org Strings
         let targetRMKeys = dataIndex.rmKeys;
         let targetFGKeys = dataIndex.fgKeys;
         let targetDCKeys = dataIndex.dcKeys;
 
-        // ORPHAN RULE: Filter Raw Materials (Must be in BOM) & Plant FGs (Must be in BOM)
-        // Keys are "ItemCode|InvOrg", split to check ID against BOM
+        // ORPHAN RULE: Filter Raw Materials & Plant FGs based on BOM existence
         targetRMKeys = targetRMKeys.filter(k => bomIndex.children.has(k.split('|')[0]));
         targetFGKeys = targetFGKeys.filter(k => bomIndex.parents.has(k.split('|')[0]));
 
-        // --- FILTERING ---
+        // --- FILTERING LOGIC ---
         if (mapFocus) {
             const focusId = mapFocus.id; // Item Code
             
@@ -493,7 +503,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
                 if (consumers) targetFGKeys = targetFGKeys.filter(k => consumers.has(k.split('|')[0]));
                 else targetFGKeys = [];
                 
-                // Match DC list to the Visible Plant FGs for consistency
+                // 2. Filter DCs based on visible FGs
                 const visibleFgCodes = new Set(targetFGKeys.map(k => k.split('|')[0]));
                 targetDCKeys = targetDCKeys.filter(k => visibleFgCodes.has(k.split('|')[0]));
 
@@ -549,7 +559,10 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
                     key={`${n.id}-${n.invOrg}`} 
                     node={n} 
                     isActive={mapFocus && mapFocus.id === n.id && mapFocus.invOrg === n.invOrg}
-                    onSelect={() => setMapFocus(n)}
+                    onSelect={() => {
+                        setMapFocus(n);
+                        onNodeSelect(n); // Trigger graph update
+                    }}
                     onOpenDetail={onOpenDetails}
                 />
             )
@@ -561,10 +574,21 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
             dcList: dcNodes.map(wrapNode)
         };
 
-    }, [dataIndex, bomIndex, mapFocus, searchTermRM, searchTermFG, searchTermDC, sortRM, sortFG, sortDC, dateRange, getNodeStats, onOpenDetails, rmClassFilter, fgPlantFilter, dcFilter]);
+    }, [dataIndex, bomIndex, mapFocus, searchTermRM, searchTermFG, searchTermDC, sortRM, sortFG, sortDC, dateRange, getNodeStats, onOpenDetails, rmClassFilter, fgPlantFilter, dcFilter, onNodeSelect]);
 
     return (
-        <div className="flex h-[500px] overflow-hidden bg-white rounded-xl border border-slate-200 shadow-inner">
+        <div className="flex h-[500px] overflow-hidden bg-white rounded-xl border border-slate-200 shadow-inner relative">
+            
+            {/* Reset Map Button (Absolute Top Right) */}
+            <div className="absolute top-2 right-2 z-20">
+                <button 
+                    onClick={handleReset}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-white/90 backdrop-blur text-xs font-medium text-slate-600 border border-slate-200 rounded-lg shadow-sm hover:text-indigo-600 hover:border-indigo-300 transition-all"
+                >
+                    <RotateCcw className="w-3 h-3" /> Reset Map
+                </button>
+            </div>
+
             {/* RM Column */}
             <RenderColumn 
                 title="Raw Materials" 
@@ -652,7 +676,6 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
     );
 };
 
-
 export default function SupplyChainDashboard() {
     const [rawData, setRawData] = useState([]);
     const [bomData, setBomData] = useState(DEFAULT_BOM);
@@ -666,7 +689,7 @@ export default function SupplyChainDashboard() {
         metric: ['All']
     });
     const [isLeadTimeMode, setIsLeadTimeMode] = useState(false);
-    const [viewMode, setViewMode] = useState('risk'); 
+    // VIEW MODE REMOVED - Now Single View
     const [selectedItem, setSelectedItem] = useState(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [hoveredDate, setHoveredDate] = useState(null);
@@ -702,7 +725,6 @@ export default function SupplyChainDashboard() {
     // --- Fetch from Google Sheets ---
     useEffect(() => {
         const fetchData = async () => {
-            // Only fetch if URLs are configured
             if (!GOOGLE_SHEET_CONFIG.INVENTORY_URL || !GOOGLE_SHEET_CONFIG.BOM_URL) {
                 const parsed = parseCSV(SAMPLE_CSV);
                 handleDataLoad(parsed);
@@ -722,7 +744,6 @@ export default function SupplyChainDashboard() {
                 const invData = parseCSV(invText);
                 const bomParsed = parseCSV(bomText);
 
-                // BOM Processing
                 const processedBom = bomParsed.map(row => ({
                     plant: row['Plant'] || row['Plant '],
                     parent: row['Parent'] || row['Parent Item'] || row['Parent Item '],
@@ -746,7 +767,6 @@ export default function SupplyChainDashboard() {
         fetchData();
     }, []);
 
-    // --- Manual Uploads (Override) ---
     const handleInventoryUpload = (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -827,7 +847,8 @@ export default function SupplyChainDashboard() {
         });
     }, [rawData, filters, dateRange]);
 
-    const riskChartData = useMemo(() => {
+    // --- CHART DATA ---
+    const chartData = useMemo(() => {
         let sourceData = filteredData;
         if (selectedItem) {
             sourceData = rawData.filter(d => 
@@ -844,55 +865,19 @@ export default function SupplyChainDashboard() {
         );
 
         chartFiltered.forEach(item => {
-            if (!grouped[item.Date]) grouped[item.Date] = { date: item.Date, _dateObj: item._dateObj };
-            if (!grouped[item.Date][item.Metric]) grouped[item.Date][item.Metric] = 0;
+            if (!grouped[item.Date]) {
+                grouped[item.Date] = { date: item.Date, _dateObj: item._dateObj };
+            }
+            if (!grouped[item.Date][item.Metric]) {
+                grouped[item.Date][item.Metric] = 0;
+            }
             grouped[item.Date][item.Metric] += (item.Value || 0);
         });
         return Object.values(grouped).sort((a, b) => a._dateObj - b._dateObj);
-    }, [filteredData, filters.metric, selectedItem, rawData, dateRange, viewMode]);
+    }, [filteredData, filters.metric, selectedItem, rawData, dateRange]);
 
-    const productionData = useMemo(() => {
-        if (viewMode !== 'manufacturing' || !selectedItem) return [];
 
-        const ingredients = bomData.filter(b => 
-            b.parent === selectedItem.itemCode && 
-            (!b.plant || b.plant === selectedItem.invOrg)
-        );
-        if (ingredients.length === 0) return [];
-
-        const fgData = rawData.filter(d => 
-            d['Item Code'] === selectedItem.itemCode && 
-            d['Inv Org'] === selectedItem.invOrg &&
-            (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
-            (!dateRange.end || d._dateObj <= new Date(dateRange.end))
-        );
-
-        const grouped = {};
-        fgData.forEach(d => {
-            if (!grouped[d.Date]) grouped[d.Date] = { date: d.Date, _dateObj: d._dateObj };
-            grouped[d.Date][d.Metric] = (grouped[d.Date][d.Metric] || 0) + d.Value;
-        });
-
-        ingredients.forEach(ing => {
-            const rmData = rawData.filter(d => 
-                d['Item Code'] === ing.child && 
-                d['Inv Org'] === selectedItem.invOrg &&
-                d.Metric === 'Tot.Inventory (Forecast)' &&
-                (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
-                (!dateRange.end || d._dateObj <= new Date(dateRange.end))
-            );
-            
-            rmData.forEach(rm => {
-                if (grouped[rm.Date]) {
-                    const possibleUnits = rm.Value / ing.ratio;
-                    grouped[rm.Date][`Max Prod (${ing.child})`] = possibleUnits;
-                }
-            });
-        });
-
-        return Object.values(grouped).sort((a,b) => a._dateObj - b._dateObj);
-    }, [viewMode, selectedItem, rawData, dateRange, bomData]);
-
+    // --- Gantt Data Logic ---
     const ganttData = useMemo(() => {
         const grouped = {};
         const today = new Date();
@@ -1017,7 +1002,6 @@ export default function SupplyChainDashboard() {
         setIsDetailOpen(false);
         setGanttSort('itemCode');
         setHoveredDate(null);
-        setViewMode('risk');
         const validTimes = [];
         for (let i = 0; i < rawData.length; i++) {
             const t = rawData[i]._dateObj ? rawData[i]._dateObj.getTime() : NaN;
@@ -1064,19 +1048,9 @@ export default function SupplyChainDashboard() {
                         </div>
                     </div>
                     <div className="flex items-center space-x-4">
-                        <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-                            <button onClick={() => setViewMode('risk')} className={`flex items-center px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'risk' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                                <Activity className="w-3.5 h-3.5 mr-1.5" />Risk Monitor
-                            </button>
-                            <button onClick={() => setViewMode('manufacturing')} className={`flex items-center px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'manufacturing' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                                <Factory className="w-3.5 h-3.5 mr-1.5" />Manufacturing
-                            </button>
-                        </div>
-                        {/* --- REFRESH BUTTON FOR GOOGLE SHEETS --- */}
                         <button onClick={() => window.location.reload()} className="group flex items-center px-3 py-2 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-600 hover:text-indigo-700 rounded-xl cursor-pointer transition-all duration-200 text-sm font-medium shadow-sm" title="Reload Data">
                              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
                         </button>
-
                         <label className="group flex items-center px-4 py-2 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-600 hover:text-indigo-700 rounded-xl cursor-pointer transition-all duration-200 text-sm font-medium shadow-sm">
                             <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600 group-hover:-translate-y-0.5 transition-transform" />Import BOM<input type="file" accept=".csv" onChange={handleBomUpload} className="hidden" />
                         </label>
@@ -1088,6 +1062,7 @@ export default function SupplyChainDashboard() {
             </header>
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+                {/* Filters Section */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 md:p-8 transition-shadow hover:shadow-md">
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center space-x-3 text-slate-800">
@@ -1125,13 +1100,14 @@ export default function SupplyChainDashboard() {
                     </div>
                 </div>
 
-                {/* --- NEW: NETWORK MAP VISUALIZATION --- */}
-                {viewMode === 'manufacturing' && (
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 relative z-10">
+                {/* --- DASHBOARD LAYOUT: MAP (Left) + CHART (Right) --- */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* LEFT: Supply Chain Network Map */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 relative overflow-hidden h-[550px]">
                         <div className="flex items-center justify-between mb-4">
                              <div className="flex items-center space-x-3">
                                 <div className="p-2 rounded-lg bg-blue-50 text-blue-600"><Network className="w-5 h-5" /></div>
-                                <div><h2 className="text-lg font-bold text-slate-900 tracking-tight">Supply Chain Network Map</h2><p className="text-sm text-slate-500">Material Flow & Inventory Health</p></div>
+                                <div><h2 className="text-lg font-bold text-slate-900 tracking-tight">Network Map</h2><p className="text-xs text-slate-500">Material Flow</p></div>
                             </div>
                         </div>
                         <SupplyChainMap 
@@ -1143,33 +1119,30 @@ export default function SupplyChainDashboard() {
                                 setSelectedItem({ itemCode: node.id, invOrg: node.invOrg, type: node.type });
                                 setIsDetailOpen(true);
                             }}
+                            onNodeSelect={(node) => {
+                                if (node) setSelectedItem({ itemCode: node.id, invOrg: node.invOrg, type: node.type });
+                                else setSelectedItem(null);
+                            }}
                         />
                     </div>
-                )}
 
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 md:p-8 relative z-10">
-                    <div className="flex items-center justify-between mb-8">
-                        <div className="flex items-center space-x-3">
-                            <div className={`p-2 rounded-lg ${viewMode === 'risk' ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'}`}>
-                                {viewMode === 'risk' ? <Activity className="w-5 h-5" /> : <Factory className="w-5 h-5" />}
-                            </div>
-                            <div>
-                                <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-                                    {viewMode === 'risk' 
-                                        ? (selectedItem ? `Trend: ${selectedItem.itemCode}` : "Aggregate Trends")
-                                        : (selectedItem ? `Production Feasibility: ${selectedItem.itemCode}` : "Select an Item in the Gantt below")
-                                    }
-                                </h2>
-                                {selectedItem && <p className="text-sm text-slate-500">{selectedItem.invOrg}</p>}
+                    {/* RIGHT: Trend Chart */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 relative overflow-hidden h-[550px]">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center space-x-3">
+                                <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600"><Activity className="w-5 h-5" /></div>
+                                <div>
+                                    <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+                                        {selectedItem ? `Trend: ${selectedItem.itemCode}` : "Aggregate Trends"}
+                                    </h2>
+                                    {selectedItem && <p className="text-xs text-slate-500">{selectedItem.invOrg}</p>}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    
-                    <div className="h-[400px] w-full">
-                        {viewMode === 'risk' ? (
-                            riskChartData.length > 0 ? (
+                        <div className="h-[450px] w-full">
+                             {chartData.length > 0 ? (
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={riskChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} onMouseMove={(e) => e && e.activeLabel && setHoveredDate(e.activeLabel)} onMouseLeave={() => setHoveredDate(null)}>
+                                    <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} onMouseMove={(e) => e && e.activeLabel && setHoveredDate(e.activeLabel)} onMouseLeave={() => setHoveredDate(null)}>
                                         <defs>{colors.map((color, index) => (<linearGradient key={index} id={`color${index}`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={color} stopOpacity={0.3}/><stop offset="95%" stopColor={color} stopOpacity={0}/></linearGradient>))}</defs>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                         <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} tickMargin={15} tickLine={false} axisLine={false} tickFormatter={(str) => `${new Date(str).getMonth() + 1}/${new Date(str).getDate()}`} />
@@ -1181,35 +1154,20 @@ export default function SupplyChainDashboard() {
                                         ))}
                                     </AreaChart>
                                 </ResponsiveContainer>
-                            ) : <EmptyState msg="No trend data available" />
-                        ) : (
-                            selectedItem ? (
-                                productionData.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <ComposedChart data={productionData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                            <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} tickMargin={15} tickLine={false} axisLine={false} tickFormatter={(str) => `${new Date(str).getMonth() + 1}/${new Date(str).getDate()}`} />
-                                            <YAxis stroke="#94a3b8" fontSize={12} width={60} tickLine={false} axisLine={false} />
-                                            <Tooltip content={<CustomTooltip />} />
-                                            <Legend iconType="circle" wrapperStyle={{paddingTop: '20px'}}/>
-                                            <Bar dataKey="Tot.Inventory (Forecast)" name="FG Inventory" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
-                                            <Line type="monotone" dataKey="Max Prod (BAB250-MR1)" name="Max Prod from RM" stroke="#10b981" strokeWidth={2} dot={{r: 4}} />
-                                        </ComposedChart>
-                                    </ResponsiveContainer>
-                                ) : <EmptyState msg="No BOM data or Ingredients found for this item." />
-                            ) : <EmptyState msg="Select an item from the list below to view production feasibility." />
-                        )}
+                            ) : <EmptyState msg="No trend data available" />}
+                        </div>
                     </div>
                 </div>
 
+                {/* BOTTOM: Risk Monitor (Gantt) */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 flex flex-col overflow-hidden">
                     <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
                         <div className="flex items-center space-x-3">
                             <div className="p-2 bg-amber-50 rounded-lg"><AlertTriangle className="w-5 h-5 text-amber-600" /></div>
-                            <div><h2 className="text-lg font-bold text-slate-900 tracking-tight">Risk Monitor & Selection</h2><p className="text-sm text-slate-500">Select items here to update charts above</p></div>
+                            <div><h2 className="text-lg font-bold text-slate-900 tracking-tight">Risk Monitor</h2><p className="text-sm text-slate-500">Timeline of projected shortages</p></div>
                         </div>
                         <div className="flex flex-wrap items-center gap-4 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
-                            <div className="flex items-center space-x-2 border-r border-slate-100 pr-4 pl-2">
+                             <div className="flex items-center space-x-2 border-r border-slate-100 pr-4 pl-2">
                                 <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
                                 <select className="text-sm border-none focus:ring-0 text-slate-600 font-medium cursor-pointer bg-transparent py-1 pr-8" value={ganttSort} onChange={(e) => setGanttSort(e.target.value)}>
                                     <option value="itemCode">Sort by Name</option>
