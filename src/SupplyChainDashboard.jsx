@@ -262,7 +262,7 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
                 </div>
                 <button 
                     onClick={(e) => { e.stopPropagation(); onOpenDetail(node); }}
-                    className="p-1 rounded-md hover:bg-white text-slate-400 hover:text-indigo-600 transition-colors"
+                    className="p-1 rounded-md hover:bg-white text-slate-400 hover:text-indigo-600 transition-colors z-10 relative"
                     title="View Details"
                 >
                     <Table className="w-3.5 h-3.5" />
@@ -282,7 +282,7 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
     );
 });
 
-// --- Render Column Helper (EXTRACTED TO FIX SCROLL SNAP) ---
+// --- Render Column Helper (EXTRACTED) ---
 const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSearchTerm, setSort, sortValue, isActiveCol, children }) => (
     <div className={`flex flex-col h-full border-r border-slate-200 bg-slate-50/30 ${isActiveCol ? 'bg-indigo-50/30' : ''} min-w-[280px] max-w-[320px]`}>
         <div className="p-3 border-b border-slate-200 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
@@ -306,18 +306,11 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
             </div>
-            {/* Header Extras (like filters) */}
             {children}
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin scrollbar-thumb-slate-200">
             {items.length > 0 ? items.map(node => (
-                // NodeCard is memoized, so scrolling is efficient
                 <React.Fragment key={node.id}>
-                   {/* Props passed via RenderColumn's parent mapping logic */}
-                   {/* But RenderColumn receives `items` which are objects. 
-                       We need to render them. Since RenderColumn is generic, 
-                       we expect items to be fully formed or pass a render prop. 
-                       To keep it simple given previous code structure: */}
                    {node.component} 
                 </React.Fragment>
             )) : <div className="text-xs text-center text-slate-400 py-8 italic">No items found</div>}
@@ -326,7 +319,7 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
 ));
 
 
-// --- Supply Chain Network Map Component (HIGHLY OPTIMIZED) ---
+// --- Supply Chain Network Map Component ---
 const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRange, onOpenDetails }) => {
     // Local State
     const [mapFocus, setMapFocus] = useState(null); 
@@ -334,20 +327,22 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
     const [searchTermFG, setSearchTermFG] = useState("");
     const [sortRM, setSortRM] = useState("alpha"); 
     const [sortFG, setSortFG] = useState("alpha"); 
-    
-    // NEW: RM Class Filter State
     const [rmClassFilter, setRmClassFilter] = useState('All');
 
     // Sync parent selection
     useEffect(() => {
         if (selectedItemFromParent) {
+            // AUTO-DETECT TYPE to prevent map breaking
+            const match = inventoryData.find(d => d['Item Code'] === selectedItemFromParent.itemCode);
+            const type = match ? match.Type : 'FG';
+
             setMapFocus({ 
-                type: 'FG', 
+                type: type,
                 id: selectedItemFromParent.itemCode, 
                 invOrg: selectedItemFromParent.invOrg 
             });
         }
-    }, [selectedItemFromParent]);
+    }, [selectedItemFromParent, inventoryData]);
 
     // 1. Index Data
     const dataIndex = useMemo(() => {
@@ -368,8 +363,8 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
     // 2. Index BOM
     const bomIndex = useMemo(() => {
-        const p2c = {}; // Parent -> Children
-        const c2p = {}; // Child -> Parents
+        const p2c = {}; 
+        const c2p = {}; 
         
         bomData.forEach(b => {
             if (!p2c[b.parent]) p2c[b.parent] = new Set();
@@ -388,7 +383,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
         const firstRec = records[0];
         const invOrg = firstRec['Inv Org'];
-        const itemClass = firstRec['Item Class']; // Capture Class
+        const itemClass = firstRec['Item Class']; 
 
         const validRecords = records.filter(d => 
             (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
@@ -435,7 +430,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         };
     }, [dataIndex, dateRange]);
 
-    // 4. Generate Lists (With Render Component Injection)
+    // 4. Generate Lists
     const { rmList, fgList } = useMemo(() => {
         let targetRMs = dataIndex.rmIds;
         let targetFGs = dataIndex.fgIds;
@@ -458,7 +453,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         let rmNodes = targetRMs.map(id => getNodeStats(id, 'RM')).filter(Boolean);
         let fgNodes = targetFGs.map(id => getNodeStats(id, 'FG')).filter(Boolean);
 
-        // NEW: Filter by RM Class (FA, AD, LI)
+        // RM Class Filter
         if (rmClassFilter !== 'All') {
             rmNodes = rmNodes.filter(n => n.itemClass && n.itemClass.includes(rmClassFilter));
         }
@@ -471,9 +466,8 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         rmNodes.sort((a, b) => sorter(a, b, sortRM));
         fgNodes.sort((a, b) => sorter(a, b, sortFG));
 
-        // Decorate nodes with Render Logic for RenderColumn to use
         const wrapNode = (n) => ({
-            id: n.id, // Key
+            id: n.id, 
             component: (
                 <NodeCard 
                     key={n.id} 
@@ -506,7 +500,6 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
                 setSort={setSortRM}
                 isActiveCol={mapFocus && mapFocus.type === 'RM'}
             >
-                {/* NEW: Filter Buttons */}
                 <div className="flex gap-1 mt-1 overflow-x-auto pb-1">
                     {['All', 'FA', 'AD', 'LI'].map(cls => (
                         <button 
@@ -568,6 +561,7 @@ export default function SupplyChainDashboard() {
     const [isLeadTimeMode, setIsLeadTimeMode] = useState(false);
     const [viewMode, setViewMode] = useState('risk'); 
     const [selectedItem, setSelectedItem] = useState(null);
+    const [isDetailOpen, setIsDetailOpen] = useState(false); // New State for Table Visibility
     const [hoveredDate, setHoveredDate] = useState(null);
     const [riskFilters, setRiskFilters] = useState({
         critical: true,
@@ -869,6 +863,7 @@ export default function SupplyChainDashboard() {
         setFilters({ itemCode: 'All', invOrg: 'All', itemClass: 'All', uom: 'All', strategy: 'All', metric: ['All'] });
         setRiskFilters({ critical: true, watchOut: true, minDays: 1 });
         setSelectedItem(null);
+        setIsDetailOpen(false);
         setGanttSort('itemCode');
         setHoveredDate(null);
         setViewMode('risk');
@@ -988,7 +983,10 @@ export default function SupplyChainDashboard() {
                             bomData={bomData} 
                             inventoryData={rawData} 
                             dateRange={dateRange} 
-                            onOpenDetails={(item) => setSelectedItem({itemCode: item.id, invOrg: item.invOrg})} 
+                            onOpenDetails={(node) => {
+                                setSelectedItem({ itemCode: node.id, invOrg: node.invOrg, type: node.type });
+                                setIsDetailOpen(true);
+                            }}
                         />
                     </div>
                 )}
@@ -1110,14 +1108,14 @@ export default function SupplyChainDashboard() {
                     </div>
                 </div>
 
-                {selectedItem && selectedItemData && viewMode === 'risk' && (
+                {selectedItem && selectedItemData && isDetailOpen && (
                     <div className="fixed inset-x-0 bottom-0 z-50 bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] transform transition-all duration-300 ease-in-out h-96 flex flex-col animate-in slide-in-from-bottom-10">
                         <div className="px-6 py-4 bg-white/50 border-b border-slate-100 flex items-center justify-between">
                             <div className="flex items-center space-x-4">
                                 <div className="bg-indigo-100 p-2 rounded-lg"><Table className="w-5 h-5 text-indigo-600" /></div>
                                 <div><h3 className="font-bold text-slate-900 text-lg tracking-tight">{selectedItem.itemCode}</h3><p className="text-xs text-slate-500 font-medium font-mono uppercase tracking-wider">{selectedItem.invOrg} — Detail View</p></div>
                             </div>
-                            <button onClick={() => setSelectedItem(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors group"><X className="w-5 h-5 text-slate-400 group-hover:text-slate-600" /></button>
+                            <button onClick={() => setIsDetailOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors group"><X className="w-5 h-5 text-slate-400 group-hover:text-slate-600" /></button>
                         </div>
                         <div className="flex-1 overflow-auto p-0">
                             <table className="w-full text-sm text-left border-collapse relative">
