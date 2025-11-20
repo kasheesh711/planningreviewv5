@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine, ComposedChart
 } from 'recharts';
@@ -282,7 +282,7 @@ const NodeCard = ({ node, onSelect, isActive, onOpenDetail }) => {
 };
 
 // --- Supply Chain Network Map Component (Enhanced) ---
-const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRange, onOpenDetails }) => {
+const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, isWithinDateRange, onOpenDetails }) => {
     // Local State for Map Interaction
     const [mapFocus, setMapFocus] = useState(null); // { type: 'FG'|'RM', id: string, invOrg: string }
     const [searchTermRM, setSearchTermRM] = useState("");
@@ -303,11 +303,10 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
     // --- Helper to aggregate weekly health ---
     const getWeeklyHealth = (itemCode, invOrg) => {
-        const records = inventoryData.filter(d => 
-            d['Item Code'] === itemCode && 
+        const records = inventoryData.filter(d =>
+            d['Item Code'] === itemCode &&
             d['Inv Org'] === invOrg &&
-            (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
-            (!dateRange.end || d._dateObj <= new Date(dateRange.end))
+            isWithinDateRange(d._dateObj)
         );
         
         const weeklyMap = {};
@@ -401,7 +400,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
         return { rmList: rmNodes, fgList: fgNodes };
 
-    }, [inventoryData, bomData, mapFocus, searchTermRM, searchTermFG, sortRM, sortFG, dateRange]);
+    }, [inventoryData, bomData, mapFocus, searchTermRM, searchTermFG, sortRM, sortFG, isWithinDateRange]);
 
     // --- Render Column Helper ---
     const RenderColumn = ({ title, count, items, type, searchTerm, setSearchTerm, setSort, sortValue, isActiveCol }) => (
@@ -568,14 +567,26 @@ export default function SupplyChainDashboard() {
         reader.readAsText(file);
     };
 
+    const dateRangeBounds = useMemo(() => {
+        const startTime = dateRange.start ? new Date(dateRange.start).getTime() : null;
+        const endTime = dateRange.end ? new Date(dateRange.end).getTime() : null;
+        return { startTime, endTime };
+    }, [dateRange.start, dateRange.end]);
+
+    const isWithinDateRange = useCallback((dateObj) => {
+        if (!dateObj || Number.isNaN(dateObj.getTime())) return false;
+        const time = dateObj.getTime();
+        return (
+            (!dateRangeBounds.startTime || time >= dateRangeBounds.startTime) &&
+            (!dateRangeBounds.endTime || time <= dateRangeBounds.endTime)
+        );
+    }, [dateRangeBounds]);
+
     // --- Filter Logic ---
     const options = useMemo(() => {
         const getFilteredDataForField = (excludeKey) => {
             return rawData.filter(item => {
-                const itemDate = item._dateObj;
-                const startDate = dateRange.start ? new Date(dateRange.start) : null;
-                const endDate = dateRange.end ? new Date(dateRange.end) : null;
-                const inDateRange = (!startDate || itemDate >= startDate) && (!endDate || itemDate <= endDate);
+                const inDateRange = isWithinDateRange(item._dateObj);
                 if (!inDateRange) return false;
                 return (
                     inDateRange &&
@@ -596,15 +607,12 @@ export default function SupplyChainDashboard() {
             strategies: getUnique(getFilteredDataForField('strategy'), 'Strategy'),
             metrics: getUnique(getFilteredDataForField('metric'), 'Metric'),
         };
-    }, [rawData, filters, dateRange]);
+    }, [rawData, filters, isWithinDateRange]);
 
     const filteredData = useMemo(() => {
         return rawData.filter(item => {
-            const itemDate = item._dateObj;
-            const startDate = dateRange.start ? new Date(dateRange.start) : null;
-            const endDate = dateRange.end ? new Date(dateRange.end) : null;
-            const inDateRange = (!startDate || itemDate >= startDate) && (!endDate || itemDate <= endDate);
-            
+            const inDateRange = isWithinDateRange(item._dateObj);
+
             return (
                 inDateRange &&
                 (filters.itemCode === 'All' || item['Item Code'] === filters.itemCode) &&
@@ -614,16 +622,15 @@ export default function SupplyChainDashboard() {
                 (filters.strategy === 'All' || item['Strategy'] === filters.strategy)
             );
         });
-    }, [rawData, filters, dateRange]);
+    }, [rawData, filters, isWithinDateRange]);
 
     const riskChartData = useMemo(() => {
         let sourceData = filteredData;
         if (selectedItem) {
-            sourceData = rawData.filter(d => 
-                d['Item Code'] === selectedItem.itemCode && 
+            sourceData = rawData.filter(d =>
+                d['Item Code'] === selectedItem.itemCode &&
                 d['Inv Org'] === selectedItem.invOrg &&
-                (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
-                (!dateRange.end || d._dateObj <= new Date(dateRange.end))
+                isWithinDateRange(d._dateObj)
             );
         }
 
@@ -638,7 +645,7 @@ export default function SupplyChainDashboard() {
             grouped[item.Date][item.Metric] += (item.Value || 0);
         });
         return Object.values(grouped).sort((a, b) => a._dateObj - b._dateObj);
-    }, [filteredData, filters.metric, selectedItem, rawData, dateRange, viewMode]);
+    }, [filteredData, filters.metric, selectedItem, rawData, isWithinDateRange, viewMode]);
 
     const productionData = useMemo(() => {
         if (viewMode !== 'manufacturing' || !selectedItem) return [];
@@ -649,11 +656,10 @@ export default function SupplyChainDashboard() {
         );
         if (ingredients.length === 0) return [];
 
-        const fgData = rawData.filter(d => 
-            d['Item Code'] === selectedItem.itemCode && 
+        const fgData = rawData.filter(d =>
+            d['Item Code'] === selectedItem.itemCode &&
             d['Inv Org'] === selectedItem.invOrg &&
-            (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
-            (!dateRange.end || d._dateObj <= new Date(dateRange.end))
+            isWithinDateRange(d._dateObj)
         );
 
         const grouped = {};
@@ -663,12 +669,11 @@ export default function SupplyChainDashboard() {
         });
 
         ingredients.forEach(ing => {
-            const rmData = rawData.filter(d => 
-                d['Item Code'] === ing.child && 
+            const rmData = rawData.filter(d =>
+                d['Item Code'] === ing.child &&
                 d['Inv Org'] === selectedItem.invOrg &&
                 d.Metric === 'Tot.Inventory (Forecast)' &&
-                (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
-                (!dateRange.end || d._dateObj <= new Date(dateRange.end))
+                isWithinDateRange(d._dateObj)
             );
             
             rmData.forEach(rm => {
@@ -680,7 +685,7 @@ export default function SupplyChainDashboard() {
         });
 
         return Object.values(grouped).sort((a,b) => a._dateObj - b._dateObj);
-    }, [viewMode, selectedItem, rawData, dateRange, bomData]);
+    }, [viewMode, selectedItem, rawData, isWithinDateRange, bomData]);
 
     const ganttData = useMemo(() => {
         const grouped = {};
@@ -769,27 +774,25 @@ export default function SupplyChainDashboard() {
     const selectedItemData = useMemo(() => {
         if (!selectedItem) return null;
         const itemsData = rawData.filter(d => d['Item Code'] === selectedItem.itemCode && d['Inv Org'] === selectedItem.invOrg);
-        const startDate = dateRange.start ? new Date(dateRange.start) : null;
-        const endDate = dateRange.end ? new Date(dateRange.end) : null;
         const uniqueDates = new Set();
         const uniqueMetrics = new Set();
         const valueMap = {};
+        const dateTimeLookup = new Map();
 
         itemsData.forEach(d => {
-             const itemDate = d._dateObj;
-             if (startDate && itemDate < startDate) return;
-             if (endDate && itemDate > endDate) return;
+             if (!isWithinDateRange(d._dateObj)) return;
              uniqueDates.add(d.Date);
+             dateTimeLookup.set(d.Date, d._dateObj.getTime());
              const metric = d.Metric.trim();
              uniqueMetrics.add(metric);
              if (!valueMap[metric]) valueMap[metric] = {};
              valueMap[metric][d.Date] = (valueMap[metric][d.Date] || 0) + d.Value;
         });
 
-        const sortedDates = Array.from(uniqueDates).sort((a,b) => new Date(a) - new Date(b));
+        const sortedDates = Array.from(uniqueDates).sort((a,b) => (dateTimeLookup.get(a) || 0) - (dateTimeLookup.get(b) || 0));
         const sortedMetrics = Array.from(uniqueMetrics).sort();
         return { dates: sortedDates, metrics: sortedMetrics, values: valueMap };
-    }, [selectedItem, rawData, dateRange]);
+    }, [selectedItem, rawData, isWithinDateRange]);
 
     const activeMetrics = useMemo(() => {
         if (filters.metric.includes('All')) return Array.from(new Set(filteredData.map(d => d.Metric)));
@@ -822,10 +825,10 @@ export default function SupplyChainDashboard() {
         }
     };
 
-    const getGanttStyles = (start, end) => {
-        if (!dateRange.start || !dateRange.end) return { left: '0%', width: '0%' };
-        const min = new Date(dateRange.start).getTime();
-        const max = new Date(dateRange.end).getTime();
+    const getGanttStyles = useCallback((start, end) => {
+        if (dateRangeBounds.startTime == null || dateRangeBounds.endTime == null) return { left: '0%', width: '0%' };
+        const min = dateRangeBounds.startTime;
+        const max = dateRangeBounds.endTime;
         const total = max - min;
         if (total <= 0) return { left: '0%', width: '0%' };
         const s = start.getTime();
@@ -834,7 +837,7 @@ export default function SupplyChainDashboard() {
         const right = Math.min(100, ((e - min) / total) * 100);
         const width = Math.max(0.5, right - left);
         return { left: `${left}%`, width: `${width}%` };
-    };
+    }, [dateRangeBounds]);
 
     const Y_AXIS_WIDTH = 200; 
 
@@ -917,12 +920,12 @@ export default function SupplyChainDashboard() {
                                 <div><h2 className="text-lg font-bold text-slate-900 tracking-tight">Supply Chain Network Map</h2><p className="text-sm text-slate-500">Material Flow & Inventory Health</p></div>
                             </div>
                         </div>
-                        <SupplyChainMap 
-                            selectedItemFromParent={selectedItem} 
-                            bomData={bomData} 
-                            inventoryData={rawData} 
-                            dateRange={dateRange} 
-                            onOpenDetails={(item) => setSelectedItem({itemCode: item.id, invOrg: item.invOrg})} 
+                        <SupplyChainMap
+                            selectedItemFromParent={selectedItem}
+                            bomData={bomData}
+                            inventoryData={rawData}
+                            isWithinDateRange={isWithinDateRange}
+                            onOpenDetails={(item) => setSelectedItem({itemCode: item.id, invOrg: item.invOrg})}
                         />
                     </div>
                 )}
