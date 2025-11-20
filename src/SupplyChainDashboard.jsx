@@ -1028,22 +1028,22 @@ export default function SupplyChainDashboard() {
         <div className={`min-h-screen pb-20 transition-colors duration-300 ${isDarkMode ? 'bg-slate-950 text-slate-200' : 'bg-slate-50 text-slate-900'}`}>
              {/* HEADER */}
              <header className={`sticky top-0 z-40 backdrop-blur-md border-b transition-colors duration-300 ${isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white/80 border-slate-200/60'}`}>
-                <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
+                <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+                    <div className="flex items-center space-x-3 min-w-0">
                         <div className="bg-indigo-600 p-2 rounded-xl shadow-lg shadow-indigo-500/20">
                             <Package className="w-5 h-5 text-white" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <h1 className={`text-lg font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Supply Chain <span className="text-indigo-500">Center</span></h1>
                             <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Inventory Intelligence</p>
                         </div>
                     </div>
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center justify-end gap-2 sm:gap-3 flex-wrap">
                         {/* Dark Mode Toggle */}
                         <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-xl border transition-all ${isDarkMode ? 'bg-slate-800 border-slate-700 text-yellow-400 hover:text-yellow-300' : 'bg-white border-slate-200 text-slate-400 hover:text-indigo-600'}`}>
                             {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                         </button>
-                        <div className={`h-6 w-px ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}></div>
+                        <div className={`hidden sm:block h-6 w-px ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}></div>
                         
                         <button onClick={() => window.location.reload()} className={`group flex items-center px-3 py-2 border rounded-xl transition-all text-xs font-medium ${isDarkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'}`} title="Reload Data">
                              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -1058,7 +1058,7 @@ export default function SupplyChainDashboard() {
                 </div>
             </header>
 
-            <div className="flex min-h-[calc(100vh-64px)] max-w-[1800px] mx-auto">
+            <div className="flex flex-col xl:flex-row min-h-[calc(100vh-64px)] max-w-[1800px] mx-auto px-4 sm:px-6 xl:px-0 gap-6 xl:gap-0">
                 {/* --- LEFT SIDEBAR PLACEHOLDER (10%) --- */}
                 <div className={`hidden xl:block w-[5%] 2xl:w-[10%] border-r ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50/50'}`}>
                     <div className="h-full w-full flex items-center justify-center opacity-10">
@@ -1067,9 +1067,9 @@ export default function SupplyChainDashboard() {
                 </div>
 
                 {/* --- CENTER MAIN CONTENT (70%) --- */}
-                <main className="flex-1 flex flex-col p-6 gap-6 min-w-0 overflow-hidden">
+                <main className="flex-1 flex flex-col p-4 sm:p-6 gap-6 min-w-0 overflow-hidden">
                     {/* SUPPLY CHAIN MAP (Main Stage) */}
-                    <div className={`flex-1 min-h-[550px] rounded-2xl shadow-sm border p-0 overflow-hidden flex flex-col transition-all duration-300 ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/20' : 'bg-white border-slate-200/60 shadow-slate-200/50'}`}>
+                    <div className={`flex-1 min-h-[360px] sm:min-h-[450px] md:min-h-[550px] rounded-2xl shadow-sm border p-0 overflow-hidden flex flex-col transition-all duration-300 ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/20' : 'bg-white border-slate-200/60 shadow-slate-200/50'}`}>
                         <div className={`p-4 border-b flex items-center justify-between ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-slate-50/50'}`}>
                             <div className="flex items-center space-x-3">
                                 <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500"><Network className="w-5 h-5" /></div>
@@ -1090,15 +1090,15 @@ export default function SupplyChainDashboard() {
                     </div>
 
                     {/* RISK MONITOR (Bottom) */}
-                    <div className={`h-[400px] rounded-2xl shadow-sm border flex flex-col overflow-hidden transition-all duration-300 ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/20' : 'bg-white border-slate-200/60 shadow-slate-200/50'}`}>
+                    <div className={`min-h-[320px] h-[360px] md:h-[420px] rounded-2xl shadow-sm border flex flex-col overflow-hidden transition-all duration-300 ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/20' : 'bg-white border-slate-200/60 shadow-slate-200/50'}`}>
                         <div className={`p-4 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-slate-50/50'}`}>
                             <div className="flex items-center space-x-3">
                                 <div className="p-2 bg-amber-500/10 rounded-lg"><AlertTriangle className="w-5 h-5 text-amber-500" /></div>
                                 <div><h2 className={`text-base font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Risk Monitor</h2><p className="text-xs text-slate-500">Shortage Timeline</p></div>
                             </div>
                             {/* Minified Risk Controls */}
-                            <div className={`flex items-center gap-4 p-1.5 rounded-xl border shadow-sm ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                                 <div className={`flex items-center space-x-2 border-r pr-4 pl-2 ${isDarkMode ? 'border-slate-700' : 'border-slate-100'}`}>
+                            <div className={`flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-1.5 rounded-xl border shadow-sm ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                                 <div className={`flex items-center space-x-2 sm:border-r sm:pr-4 sm:pl-2 w-full sm:w-auto ${isDarkMode ? 'sm:border-slate-700' : 'sm:border-slate-100'}`}>
                                     <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
                                     <select className={`text-xs border-none focus:ring-0 font-medium bg-transparent cursor-pointer ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`} value={ganttSort} onChange={(e) => setGanttSort(e.target.value)}>
                                         <option value="itemCode">Name</option>
@@ -1106,7 +1106,7 @@ export default function SupplyChainDashboard() {
                                         <option value="duration">Duration</option>
                                     </select>
                                 </div>
-                                <div className={`flex items-center space-x-3 text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                                <div className={`flex flex-wrap items-center gap-3 text-xs font-medium w-full sm:w-auto ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                                     <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={riskFilters.critical} onChange={e => setRiskFilters(p => ({...p, critical: e.target.checked}))} className="rounded text-red-500 focus:ring-red-500 border-slate-300" />Critical</label>
                                     <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={riskFilters.watchOut} onChange={e => setRiskFilters(p => ({...p, watchOut: e.target.checked}))} className="rounded text-amber-400 focus:ring-amber-400 border-slate-300" />Watch Out</label>
                                 </div>
@@ -1143,7 +1143,7 @@ export default function SupplyChainDashboard() {
                 </main>
 
                 {/* --- RIGHT SIDEBAR (20%) --- */}
-                <aside className={`w-[300px] 2xl:w-[20%] border-l h-screen sticky top-0 overflow-y-auto z-30 shadow-xl flex flex-col transition-colors duration-300 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                <aside className={`w-full xl:w-[300px] 2xl:w-[20%] border-t xl:border-t-0 xl:border-l xl:h-screen xl:sticky xl:top-0 overflow-y-auto z-30 shadow-xl flex flex-col transition-colors duration-300 order-first xl:order-none ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
                     {/* 1. Trend Graph (Top Priority) */}
                     <div className={`p-5 border-b ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-slate-50/50'}`}>
                         <div className="flex items-center gap-2 mb-4">
@@ -1208,7 +1208,7 @@ export default function SupplyChainDashboard() {
                 </aside>
 
                 {selectedItem && selectedItemData && isDetailOpen && (
-                    <div className={`fixed inset-x-0 bottom-0 z-50 backdrop-blur-xl border-t shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.2)] transform transition-all duration-300 ease-in-out h-96 flex flex-col animate-in slide-in-from-bottom-10 ${isDarkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200'}`}>
+                    <div className={`fixed inset-x-0 bottom-0 z-50 backdrop-blur-xl border-t shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.2)] transform transition-all duration-300 ease-in-out h-[70vh] sm:h-96 flex flex-col animate-in slide-in-from-bottom-10 ${isDarkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200'}`}>
                         <div className={`px-6 py-4 border-b flex items-center justify-between ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white/50 border-slate-100'}`}>
                             <div className="flex items-center space-x-4">
                                 <div className="bg-indigo-500/10 p-2 rounded-lg"><Table className="w-5 h-5 text-indigo-500" /></div>
