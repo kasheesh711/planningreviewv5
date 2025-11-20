@@ -217,8 +217,7 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false }) =>
 };
 
 // --- Weekly Health Indicator Component ---
-const WeeklyHealthIndicator = ({ data }) => {
-    // Expecting data: [{ week: 1, pct: 120 }, { week: 2, pct: 80 }, ...]
+const WeeklyHealthIndicator = React.memo(({ data }) => {
     if (!data || data.length === 0) return <div className="text-[10px] text-slate-400">No forecast data</div>;
 
     return (
@@ -237,10 +236,10 @@ const WeeklyHealthIndicator = ({ data }) => {
             })}
         </div>
     );
-};
+});
 
 // --- Node Card Component ---
-const NodeCard = ({ node, onSelect, isActive, onOpenDetail }) => {
+const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail }) => {
     const statusColors = {
         'Critical': 'border-red-200 bg-red-50/50 hover:border-red-300',
         'Low': 'border-amber-200 bg-amber-50/50 hover:border-amber-300',
@@ -279,18 +278,18 @@ const NodeCard = ({ node, onSelect, isActive, onOpenDetail }) => {
             <WeeklyHealthIndicator data={node.weeklyHealth} />
         </div>
     );
-};
+});
 
-// --- Supply Chain Network Map Component (Enhanced) ---
+// --- Supply Chain Network Map Component (HIGHLY OPTIMIZED) ---
 const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRange, onOpenDetails }) => {
-    // Local State for Map Interaction
-    const [mapFocus, setMapFocus] = useState(null); // { type: 'FG'|'RM', id: string, invOrg: string }
+    // Local State
+    const [mapFocus, setMapFocus] = useState(null); 
     const [searchTermRM, setSearchTermRM] = useState("");
     const [searchTermFG, setSearchTermFG] = useState("");
-    const [sortRM, setSortRM] = useState("alpha"); // 'alpha' | 'invDesc'
+    const [sortRM, setSortRM] = useState("alpha"); 
     const [sortFG, setSortFG] = useState("alpha"); 
 
-    // Sync parent selection to local focus initially
+    // Sync parent selection
     useEffect(() => {
         if (selectedItemFromParent) {
             setMapFocus({ 
@@ -301,96 +300,126 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         }
     }, [selectedItemFromParent]);
 
-    // --- Helper to aggregate weekly health ---
-    const getWeeklyHealth = (itemCode, invOrg) => {
-        const records = inventoryData.filter(d => 
-            d['Item Code'] === itemCode && 
-            d['Inv Org'] === invOrg &&
+    // 1. PERFORMANCE FIX: Create Index (O(N)) once
+    const dataIndex = useMemo(() => {
+        const idx = {};
+        const rms = new Set();
+        const fgs = new Set();
+
+        inventoryData.forEach(row => {
+            const code = row['Item Code'];
+            if (!idx[code]) idx[code] = [];
+            idx[code].push(row);
+            
+            // Identify Type efficiently
+            if (row.Type === 'RM') rms.add(code);
+            else if (row.Type === 'FG') fgs.add(code);
+        });
+        return { index: idx, rmIds: Array.from(rms), fgIds: Array.from(fgs) };
+    }, [inventoryData]);
+
+    // 2. PERFORMANCE FIX: Index BOM (O(N)) once
+    const bomIndex = useMemo(() => {
+        const p2c = {}; // Parent -> Children
+        const c2p = {}; // Child -> Parents
+        
+        bomData.forEach(b => {
+            if (!p2c[b.parent]) p2c[b.parent] = new Set();
+            p2c[b.parent].add(b.child);
+
+            if (!c2p[b.child]) c2p[b.child] = new Set();
+            c2p[b.child].add(b.parent);
+        });
+        return { p2c, c2p };
+    }, [bomData]);
+
+    // 3. PERFORMANCE FIX: Optimized Stat Calculation (O(1) lookup)
+    const getNodeStats = (itemCode, type) => {
+        const records = dataIndex.index[itemCode];
+        if (!records) return null;
+
+        // Optimization: Grab first record to get static details (Inv Org)
+        // In real world, handling multiple orgs per item requires aggregation, 
+        // but keeping it simple as per original logic for speed.
+        const firstRec = records[0];
+        const invOrg = firstRec['Inv Org'];
+
+        // Apply Date Filtering ONLY on relevant records (Tiny subset)
+        const validRecords = records.filter(d => 
             (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
             (!dateRange.end || d._dateObj <= new Date(dateRange.end))
         );
-        
+
+        // Calculate Weekly Health
         const weeklyMap = {};
-        records.forEach(r => {
-            const weekNum = Math.floor((r._dateObj.getTime() - new Date(r._dateObj.getFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000));
-            if (!weeklyMap[weekNum]) weeklyMap[weekNum] = { inv: 0, target: 0, count: 0 };
-            
-            if (r.Metric === 'Tot.Inventory (Forecast)') weeklyMap[weekNum].inv += r.Value;
-            if (r.Metric === 'Tot.Target Inv.') weeklyMap[weekNum].target += r.Value;
-            if (r.Metric === 'Tot.Inventory (Forecast)') weeklyMap[weekNum].count++;
+        validRecords.forEach(r => {
+            if (r.Metric === 'Tot.Inventory (Forecast)' || r.Metric === 'Tot.Target Inv.') {
+                // Fast week calc
+                const weekNum = Math.floor(r._dateObj.getTime() / (7 * 24 * 60 * 60 * 1000));
+                if (!weeklyMap[weekNum]) weeklyMap[weekNum] = { inv: 0, target: 0, count: 0 };
+                
+                if (r.Metric === 'Tot.Inventory (Forecast)') {
+                    weeklyMap[weekNum].inv += r.Value;
+                    weeklyMap[weekNum].count++;
+                }
+                if (r.Metric === 'Tot.Target Inv.') {
+                    weeklyMap[weekNum].target += r.Value;
+                }
+            }
         });
 
-        return Object.keys(weeklyMap).sort().map(w => {
+        const weeklyHealth = Object.keys(weeklyMap).sort().map(w => {
             const d = weeklyMap[w];
             const avgInv = d.count ? d.inv / d.count : 0;
-            const avgTarget = d.count ? d.target / d.count : 1; // avoid div 0
-            const pct = avgTarget > 0 ? (avgInv / avgTarget) * 100 : 0;
-            return { week: w, pct };
+            const avgTarget = d.count ? d.target / d.count : 1;
+            return { week: w, pct: avgTarget > 0 ? (avgInv / avgTarget) * 100 : 0 };
         });
-    };
 
-    // --- Helper to get node stats ---
-    const getNodeStats = (itemCode, invOrg, type) => {
-        const records = inventoryData.filter(d => 
-            d['Item Code'] === itemCode && 
-            d['Inv Org'] === invOrg &&
-            d.Metric === 'Tot.Inventory (Forecast)'
-        );
-        // Use latest available date for "Current Inv"
-        const sorted = records.sort((a,b) => b._dateObj - a._dateObj);
-        const currentInv = sorted.length > 0 ? sorted[0].Value : 0;
+        // Current Inventory (Latest Date)
+        // Filter only inventory rows first to sort less
+        const invRows = validRecords.filter(r => r.Metric === 'Tot.Inventory (Forecast)');
+        invRows.sort((a,b) => b._dateObj - a._dateObj);
+        const currentInv = invRows.length > 0 ? invRows[0].Value : 0;
         const status = currentInv < 0 ? 'Critical' : (currentInv < 1000 ? 'Low' : 'Good');
-        
+
         return {
             id: itemCode,
-            itemCode: itemCode, // For detail view compat
+            itemCode: itemCode,
             invOrg: invOrg,
             type,
             status,
             currentInv,
-            weeklyHealth: getWeeklyHealth(itemCode, invOrg)
+            weeklyHealth
         };
     };
 
-    // --- Compute Lists based on Map Focus ---
+    // 4. Generate Lists (Fast)
     const { rmList, fgList } = useMemo(() => {
-        // Base lists (all available in raw data for the selected plants)
-        // Actually, we should limit to what's in BOM for connections, but user wants scrollable lists.
-        // Let's derive distinct items from Inventory Data first.
-        
-        let allRMs = [...new Set(inventoryData.filter(d => d.Type === 'RM').map(d => d['Item Code']))];
-        let allFGs = [...new Set(inventoryData.filter(d => d.Type === 'FG').map(d => d['Item Code']))];
+        let targetRMs = dataIndex.rmIds;
+        let targetFGs = dataIndex.fgIds;
 
-        // Apply Bi-Directional Filtering
+        // Filter by Map Interaction (O(1) Set lookup)
         if (mapFocus) {
             if (mapFocus.type === 'FG') {
-                // FG Selected -> Filter RMs to ingredients
-                const ingredients = bomData.filter(b => b.parent === mapFocus.id).map(b => b.child);
-                allRMs = allRMs.filter(id => ingredients.includes(id));
+                const children = bomIndex.p2c[mapFocus.id];
+                if (children) targetRMs = targetRMs.filter(id => children.has(id));
+                else targetRMs = []; // No ingredients
             } else if (mapFocus.type === 'RM') {
-                // RM Selected -> Filter FGs to consumers
-                const consumers = bomData.filter(b => b.child === mapFocus.id).map(b => b.parent);
-                allFGs = allFGs.filter(id => consumers.includes(id));
+                const parents = bomIndex.c2p[mapFocus.id];
+                if (parents) targetFGs = targetFGs.filter(id => parents.has(id));
+                else targetFGs = []; // No consumers
             }
         }
 
-        // Map to full node objects
-        let rmNodes = allRMs.map(id => {
-            // Find org from data (first match or specific if known)
-            const record = inventoryData.find(d => d['Item Code'] === id && d.Type === 'RM'); 
-            return record ? getNodeStats(id, record['Inv Org'], 'RM') : null;
-        }).filter(Boolean);
+        // Search Filter
+        if (searchTermRM) targetRMs = targetRMs.filter(id => id.toLowerCase().includes(searchTermRM.toLowerCase()));
+        if (searchTermFG) targetFGs = targetFGs.filter(id => id.toLowerCase().includes(searchTermFG.toLowerCase()));
 
-        let fgNodes = allFGs.map(id => {
-            const record = inventoryData.find(d => d['Item Code'] === id && d.Type === 'FG');
-            return record ? getNodeStats(id, record['Inv Org'], 'FG') : null;
-        }).filter(Boolean);
+        // Hydrate Nodes (Lazy Map)
+        let rmNodes = targetRMs.map(id => getNodeStats(id, 'RM')).filter(Boolean);
+        let fgNodes = targetFGs.map(id => getNodeStats(id, 'FG')).filter(Boolean);
 
-        // Apply Search
-        if (searchTermRM) rmNodes = rmNodes.filter(n => n.id.toLowerCase().includes(searchTermRM.toLowerCase()));
-        if (searchTermFG) fgNodes = fgNodes.filter(n => n.id.toLowerCase().includes(searchTermFG.toLowerCase()));
-
-        // Apply Sort
+        // Sort
         const sorter = (a, b, method) => {
             if (method === 'alpha') return a.id.localeCompare(b.id);
             if (method === 'invDesc') return b.currentInv - a.currentInv;
@@ -401,7 +430,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
         return { rmList: rmNodes, fgList: fgNodes };
 
-    }, [inventoryData, bomData, mapFocus, searchTermRM, searchTermFG, sortRM, sortFG, dateRange]);
+    }, [dataIndex, bomIndex, mapFocus, searchTermRM, searchTermFG, sortRM, sortFG, dateRange]);
 
     // --- Render Column Helper ---
     const RenderColumn = ({ title, count, items, type, searchTerm, setSearchTerm, setSort, sortValue, isActiveCol }) => (
@@ -500,7 +529,7 @@ export default function SupplyChainDashboard() {
         metric: ['All']
     });
     const [isLeadTimeMode, setIsLeadTimeMode] = useState(false);
-    const [viewMode, setViewMode] = useState('risk'); // 'risk' | 'manufacturing'
+    const [viewMode, setViewMode] = useState('risk');
     const [selectedItem, setSelectedItem] = useState(null);
     const [hoveredDate, setHoveredDate] = useState(null);
     const [riskFilters, setRiskFilters] = useState({
