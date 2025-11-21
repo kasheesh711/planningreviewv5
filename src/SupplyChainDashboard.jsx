@@ -982,6 +982,20 @@ export default function SupplyChainDashboard() {
         return { dates: sortedDates, metrics: sortedMetrics, values: valueMap };
     }, [selectedItem, rawData, dateRange]);
 
+    const getInventoryCellClass = (val, targetVal) => {
+        if (val === undefined || val === null || Number.isNaN(val)) return isDarkMode ? "text-slate-500" : "text-slate-400";
+        if (!targetVal) return val < 0
+            ? "text-red-500 font-bold bg-red-500/10"
+            : (isDarkMode ? "text-slate-300 font-medium" : "text-slate-700 font-medium");
+
+        const ratio = (val / targetVal) * 100;
+        if (ratio > 120) return isDarkMode ? "text-blue-300 font-semibold bg-blue-500/10" : "text-blue-600 font-semibold bg-blue-50";
+        if (ratio >= 80) return isDarkMode ? "text-emerald-300 font-semibold bg-emerald-500/10" : "text-emerald-600 font-semibold bg-emerald-50";
+        if (ratio >= 30) return isDarkMode ? "text-amber-200 font-semibold bg-amber-500/10" : "text-amber-600 font-semibold bg-amber-50";
+        if (ratio > 0) return isDarkMode ? "text-orange-200 font-semibold bg-orange-500/10" : "text-orange-600 font-semibold bg-orange-50";
+        return "text-red-500 font-bold bg-red-500/10";
+    };
+
     const activeMetrics = useMemo(() => {
         if (filters.metric.includes('All')) return Array.from(new Set(filteredData.map(d => d.Metric)));
         return filters.metric;
@@ -1250,8 +1264,14 @@ export default function SupplyChainDashboard() {
                                             {selectedItemData.dates.map(dateStr => {
                                                 const val = selectedItemData.values[metric]?.[dateStr];
                                                 let cellClass = isDarkMode ? "text-slate-500" : "text-slate-400";
-                                                if (metric === 'Tot.Inventory (Forecast)' && val < 0) cellClass = "text-red-500 font-bold bg-red-500/10";
-                                                else if (val > 0) cellClass = isDarkMode ? "text-slate-300 font-medium" : "text-slate-700 font-medium";
+
+                                                if (metric === 'Tot.Inventory (Forecast)') {
+                                                    const targetVal = selectedItemData.values['Tot.Target Inv.']?.[dateStr];
+                                                    cellClass = getInventoryCellClass(val, targetVal);
+                                                } else if (val > 0) {
+                                                    cellClass = isDarkMode ? "text-slate-300 font-medium" : "text-slate-700 font-medium";
+                                                }
+
                                                 return <td key={dateStr} className={`px-3 py-2 text-right border-r transition-colors font-mono text-xs ${cellClass} ${isDarkMode ? 'border-slate-800' : 'border-slate-50'}`}>{val !== undefined ? val.toLocaleString(undefined, {maximumFractionDigits: 0}) : '-'}</td>;
                                             })}
                                         </tr>
