@@ -274,7 +274,7 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail, isDarkMod
             
             <div className="flex items-baseline justify-between mt-1">
                 <div className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                    Inv: <span className={node.currentInv < 0 ? "text-rose-500 font-bold" : ""}>{node.currentInv?.toLocaleString() || 0}</span>
+                    Start Inv: <span className={node.currentInv < 0 ? "text-rose-500 font-bold" : ""}>{node.currentInv?.toLocaleString() || 0}</span>
                 </div>
                 {node.status === 'Critical' && <div className="animate-pulse"><AlertTriangle className="w-3.5 h-3.5 text-rose-500" /></div>}
             </div>
@@ -286,7 +286,7 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail, isDarkMod
 
 // --- Render Column Helper ---
 const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSearchTerm, setSort, sortValue, isActiveCol, isDarkMode, children }) => (
-    <div className={`flex flex-col h-full border-r ${isDarkMode ? 'border-slate-800 bg-slate-900/20' : 'border-slate-200/60 bg-slate-50/30'} ${isActiveCol ? (isDarkMode ? 'bg-indigo-900/10' : 'bg-indigo-50/30') : ''} min-w-[300px] flex-1`}>
+    <div className={`flex flex-col h-full min-h-0 border-r ${isDarkMode ? 'border-slate-800 bg-slate-900/20' : 'border-slate-200/60 bg-slate-50/30'} ${isActiveCol ? (isDarkMode ? 'bg-indigo-900/10' : 'bg-indigo-50/30') : ''} min-w-[300px] flex-1`}>
         <div className={`p-4 border-b backdrop-blur-sm sticky top-0 z-10 ${isDarkMode ? 'border-slate-800 bg-slate-900/80' : 'border-slate-200/60 bg-white/80'}`}>
             <div className="flex items-center justify-between mb-3">
                 <h3 className={`text-xs font-bold uppercase tracking-widest flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -312,10 +312,10 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
             </div>
             {children}
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin">
+        <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin min-h-0">
             {items.length > 0 ? items.map(node => (
                 <React.Fragment key={`${node.id}-${node.invOrg}`}>
-                   {node.component} 
+                   {node.component}
                 </React.Fragment>
             )) : <div className="text-xs text-center opacity-40 py-12 italic">No items found</div>}
         </div>
@@ -391,19 +391,22 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
     // 2. Index BOM
     const bomIndex = useMemo(() => {
-        const p2c = {}; // Parent -> Children
-        const c2p = {}; // Child -> Parents
+        const p2c = {}; // Parent+Plant -> Children+Plant
+        const c2p = {}; // Child+Plant -> Parents+Plant
         const parents = new Set();
         const children = new Set();
-        
-        bomData.forEach(b => {
-            if (!p2c[b.parent]) p2c[b.parent] = new Set();
-            p2c[b.parent].add(b.child);
-            parents.add(b.parent);
 
-            if (!c2p[b.child]) c2p[b.child] = new Set();
-            c2p[b.child].add(b.parent);
-            children.add(b.child);
+        bomData.forEach(b => {
+            const parentKey = `${b.parent}|${b.plant}`;
+            const childKey = `${b.child}|${b.plant}`;
+
+            if (!p2c[parentKey]) p2c[parentKey] = new Set();
+            p2c[parentKey].add(childKey);
+            parents.add(parentKey);
+
+            if (!c2p[childKey]) c2p[childKey] = new Set();
+            c2p[childKey].add(parentKey);
+            children.add(childKey);
         });
         return { p2c, c2p, parents, children };
     }, [bomData]);
@@ -447,7 +450,12 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         });
 
         const invRows = validRecords.filter(r => r.Metric === 'Tot.Inventory (Forecast)');
-        invRows.sort((a,b) => b._dateObj - a._dateObj);
+        invRows.sort((a, b) => {
+            if (a._dateObj && b._dateObj) return a._dateObj - b._dateObj;
+            return (a.Start ?? 0) - (b.Start ?? 0);
+        });
+
+        // Show the starting forecast inventory value
         const currentInv = invRows.length > 0 ? invRows[0].Value : 0;
         const status = currentInv < 0 ? 'Critical' : (currentInv < 1000 ? 'Low' : 'Good');
 
@@ -469,32 +477,39 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         let targetFGKeys = dataIndex.fgKeys;
         let targetDCKeys = dataIndex.dcKeys;
 
-        targetRMKeys = targetRMKeys.filter(k => bomIndex.children.has(k.split('|')[0]));
-        targetFGKeys = targetFGKeys.filter(k => bomIndex.parents.has(k.split('|')[0]));
+        targetRMKeys = targetRMKeys.filter(k => bomIndex.children.has(k));
+        targetFGKeys = targetFGKeys.filter(k => bomIndex.parents.has(k));
 
         if (mapFocus) {
-            const focusId = mapFocus.id; 
-            
+            const focusId = mapFocus.id;
+
             if (mapFocus.type === 'FG') {
-                const ingredients = bomIndex.p2c[focusId];
-                if (ingredients) targetRMKeys = targetRMKeys.filter(k => ingredients.has(k.split('|')[0]));
-                else targetRMKeys = []; 
-                
+                const parentKey = `${focusId}|${mapFocus.invOrg}`;
+                const ingredients = bomIndex.p2c[parentKey];
+                if (ingredients) targetRMKeys = targetRMKeys.filter(k => ingredients.has(k));
+                else targetRMKeys = [];
+
                 targetDCKeys = targetDCKeys.filter(k => k.split('|')[0] === focusId);
 
             } else if (mapFocus.type === 'RM') {
-                const consumers = bomIndex.c2p[focusId];
-                if (consumers) targetFGKeys = targetFGKeys.filter(k => consumers.has(k.split('|')[0]));
+                const childKey = `${focusId}|${mapFocus.invOrg}`;
+                const consumers = bomIndex.c2p[childKey];
+                if (consumers) targetFGKeys = targetFGKeys.filter(k => consumers.has(k));
                 else targetFGKeys = [];
-                
+
                 const visibleFgCodes = new Set(targetFGKeys.map(k => k.split('|')[0]));
                 targetDCKeys = targetDCKeys.filter(k => visibleFgCodes.has(k.split('|')[0]));
 
             } else if (mapFocus.type === 'DC') {
                 targetFGKeys = targetFGKeys.filter(k => k.split('|')[0] === focusId);
-                
-                const ingredients = bomIndex.p2c[focusId];
-                if (ingredients) targetRMKeys = targetRMKeys.filter(k => ingredients.has(k.split('|')[0]));
+
+                const ingredientKeys = new Set();
+                targetFGKeys.forEach(parentKey => {
+                    const ingredients = bomIndex.p2c[parentKey];
+                    if (ingredients) ingredients.forEach(i => ingredientKeys.add(i));
+                });
+
+                if (ingredientKeys.size > 0) targetRMKeys = targetRMKeys.filter(k => ingredientKeys.has(k));
                 else targetRMKeys = [];
             }
         }
@@ -555,7 +570,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
     }, [dataIndex, bomIndex, mapFocus, searchTermRM, searchTermFG, searchTermDC, sortRM, sortFG, sortDC, dateRange, getNodeStats, onOpenDetails, rmClassFilter, fgPlantFilter, dcFilter, onNodeSelect, isDarkMode]);
 
     return (
-        <div className={`flex h-full overflow-hidden rounded-2xl border shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/50' : 'bg-white border-slate-200 shadow-slate-200/50'} relative transition-colors duration-300`}>
+        <div className={`flex h-full min-h-0 overflow-hidden rounded-2xl border shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/50' : 'bg-white border-slate-200 shadow-slate-200/50'} relative transition-colors duration-300`}>
             
             {/* Reset Map Button */}
             <div className="absolute top-3 right-3 z-30">
@@ -959,13 +974,27 @@ export default function SupplyChainDashboard() {
              const metric = d.Metric.trim();
              uniqueMetrics.add(metric);
              if (!valueMap[metric]) valueMap[metric] = {};
-             valueMap[metric][d.Date] = (valueMap[metric][d.Date] || 0) + d.Value;
+             valueMap[metric][d.Date] = d.Value;
         });
 
         const sortedDates = Array.from(uniqueDates).sort((a,b) => new Date(a) - new Date(b));
         const sortedMetrics = Array.from(uniqueMetrics).sort();
         return { dates: sortedDates, metrics: sortedMetrics, values: valueMap };
     }, [selectedItem, rawData, dateRange]);
+
+    const getInventoryCellClass = (val, targetVal) => {
+        if (val === undefined || val === null || Number.isNaN(val)) return isDarkMode ? "text-slate-500" : "text-slate-400";
+        if (!targetVal) return val < 0
+            ? "text-red-500 font-bold bg-red-500/10"
+            : (isDarkMode ? "text-slate-300 font-medium" : "text-slate-700 font-medium");
+
+        const ratio = (val / targetVal) * 100;
+        if (ratio > 120) return isDarkMode ? "text-blue-300 font-semibold bg-blue-500/10" : "text-blue-600 font-semibold bg-blue-50";
+        if (ratio >= 80) return isDarkMode ? "text-emerald-300 font-semibold bg-emerald-500/10" : "text-emerald-600 font-semibold bg-emerald-50";
+        if (ratio >= 30) return isDarkMode ? "text-amber-200 font-semibold bg-amber-500/10" : "text-amber-600 font-semibold bg-amber-50";
+        if (ratio > 0) return isDarkMode ? "text-orange-200 font-semibold bg-orange-500/10" : "text-orange-600 font-semibold bg-orange-50";
+        return "text-red-500 font-bold bg-red-500/10";
+    };
 
     const activeMetrics = useMemo(() => {
         if (filters.metric.includes('All')) return Array.from(new Set(filteredData.map(d => d.Metric)));
@@ -1235,8 +1264,14 @@ export default function SupplyChainDashboard() {
                                             {selectedItemData.dates.map(dateStr => {
                                                 const val = selectedItemData.values[metric]?.[dateStr];
                                                 let cellClass = isDarkMode ? "text-slate-500" : "text-slate-400";
-                                                if (metric === 'Tot.Inventory (Forecast)' && val < 0) cellClass = "text-red-500 font-bold bg-red-500/10";
-                                                else if (val > 0) cellClass = isDarkMode ? "text-slate-300 font-medium" : "text-slate-700 font-medium";
+
+                                                if (metric === 'Tot.Inventory (Forecast)') {
+                                                    const targetVal = selectedItemData.values['Tot.Target Inv.']?.[dateStr];
+                                                    cellClass = getInventoryCellClass(val, targetVal);
+                                                } else if (val > 0) {
+                                                    cellClass = isDarkMode ? "text-slate-300 font-medium" : "text-slate-700 font-medium";
+                                                }
+
                                                 return <td key={dateStr} className={`px-3 py-2 text-right border-r transition-colors font-mono text-xs ${cellClass} ${isDarkMode ? 'border-slate-800' : 'border-slate-50'}`}>{val !== undefined ? val.toLocaleString(undefined, {maximumFractionDigits: 0}) : '-'}</td>;
                                             })}
                                         </tr>
