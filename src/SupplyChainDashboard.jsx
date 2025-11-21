@@ -3,7 +3,7 @@ import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine, ComposedChart
 } from 'recharts';
 import {
-    Upload, Filter, Package, Calendar,ZW, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet,TZ, ArrowRight, Warehouse, Box, ArrowLeftRight, MapPin, RefreshCw, RotateCcw,HZ, PanelLeft, Sun, Moon, MoreHorizontal, Share2, LayoutDashboard
+    Upload, Filter, Package, Calendar, ChevronDown, Search,HZ, Clock,TZ, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, ArrowLeftRight, MapPin, RefreshCw, RotateCcw, PanelLeft, Sun, Moon, MoreHorizontal, Share2, LayoutDashboard
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -43,6 +43,11 @@ const parseCSV = (csvText) => {
         }
     }
     return data;
+};
+
+constSx = (dateObj) => {
+    if (!dateObj || isNaN(dateObj.getTime())) return '';
+    return dateObj.toISOString().split('T')[0];
 };
 
 const toInputDate = (dateObj) => {
@@ -86,7 +91,7 @@ const DEFAULT_BOM = [
 // --- Network Analysis Component (Obsidian Style) ---
 const NetworkGraphView = ({ rawData, bomData, isDarkMode }) => {
     const canvasRef = useRef(null);
-    const [hideOrfhans, setHideOrphans] = useState(false);
+    const [hideOrphans, setHideOrphans] = useState(false);
     const [metricMode, setMetricMode] = useState('Type'); // Type, Health
     const [hoveredNode, setHoveredNode] = useState(null);
     const animationRef = useRef(null);
@@ -123,7 +128,6 @@ const NetworkGraphView = ({ rawData, bomData, isDarkMode }) => {
             const node = nodesMap.get(id);
             if (row.Metric === 'Tot.Inventory (Forecast)' && row._dateObj) {
                  // Simple logic: use the first value found (Start) or latest. 
-                 // For simplicity, let's just take the first record's value effectively acting as "Current"
                  if (node.currentInv === 0) node.currentInv = row.Value;
             }
             if (row.Metric === 'Tot.Target Inv.' && row._dateObj) {
@@ -134,7 +138,6 @@ const NetworkGraphView = ({ rawData, bomData, isDarkMode }) => {
         const nodes = Array.from(nodesMap.values());
 
         // Create Links from BOM (Parent -> Child)
-        // We need to match Parent Item+Plant to Child Item+Plant
         bomData.forEach(bom => {
             const parentId = `${bom.parent}|${bom.plant}`;
             const childId = `${bom.child}|${bom.plant}`;
@@ -147,7 +150,6 @@ const NetworkGraphView = ({ rawData, bomData, isDarkMode }) => {
         });
 
         // Create Links for Transfers (Plant FG -> DC FG)
-        // Logic: If same ItemCode exists in Plant and DC, assume flow
         const plantNodes = nodes.filter(n => n.type === 'FG');
         const dcNodes = nodes.filter(n => n.type === 'DC');
 
@@ -169,7 +171,6 @@ const NetworkGraphView = ({ rawData, bomData, isDarkMode }) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
-        let {VB} = canvas.getBoundingClientRect();
         canvas.width = canvas.offsetWidth;
         canvas.height = canvas.offsetHeight;
         
@@ -180,7 +181,7 @@ const NetworkGraphView = ({ rawData, bomData, isDarkMode }) => {
             type: l.type
         })).filter(l => l.source && l.target);
 
-        if (hideOrfhans) {
+        if (hideOrphans) {
             const activeIds = new Set();
             links.forEach(l => { activeIds.add(l.source.id); activeIds.add(l.target.id); });
             nodes = nodes.filter(n => activeIds.has(n.id));
@@ -203,7 +204,7 @@ const NetworkGraphView = ({ rawData, bomData, isDarkMode }) => {
                     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
                     const force = 2000 / (dist * dist); // Coulomb-like
                     const fx = (dx / dist) * force;
-                    constfy = (dy / dist) * force;
+                    const fy = (dy / dist) * force;
                     nodes[i].vx += fx; nodes[i].vy += fy;
                     nodes[j].vx -= fx; nodes[j].vy -= fy;
                 }
@@ -261,15 +262,11 @@ const NetworkGraphView = ({ rawData, bomData, isDarkMode }) => {
                 
                 ctx.fill();
                 
-                // Hover Effect
+                // Hover Effect (simple distance check could go here, omitted for brevity)
                 if (hoveredNode && hoveredNode.id === node.id) {
                     ctx.strokeStyle = isDarkMode ? '#fff' : '#000';
                     ctx.lineWidth = 2;
                     ctx.stroke();
-                    
-                    ctx.fillStyle = isDarkMode ? '#fff' : '#000';
-                    ctx.font = '10px sans-serif';
-                    ctx.fillText(node.id, node.x + 8, node.y + 3);
                 }
             });
 
@@ -278,21 +275,11 @@ const NetworkGraphView = ({ rawData, bomData, isDarkMode }) => {
 
         tick();
         return () => cancelAnimationFrame(animationRef.current);
-    }, [graphData, hideOrfhans, metricMode, isDarkMode, hoveredNode]);
+    }, [graphData, hideOrphans, metricMode, isDarkMode, hoveredNode]);
 
     // Interaction
     const handleMouseMove = (e) => {
-        const canvas = canvasRef.current;
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
-        // Find closest node
-        const nodes = Array.from(graphData.nodesMap.values()); // Note: These don't update coords from sim unless we share ref. 
-        // For simple demo, we need to access the mutated nodes from inside the effect.
-        // Actually, since we clone inside useEffect, we can't easily hit test without ref sharing.
-        // SIMPLIFICATION: Interactive hit testing is omitted for this code-golf style constraint, 
-        // but in a full app, use a shared Ref for node positions.
+        // Simple placeholder for interactivity
     };
 
     return (
@@ -308,7 +295,7 @@ const NetworkGraphView = ({ rawData, bomData, isDarkMode }) => {
                     <label className="flex items-center gap-2 text-xs cursor-pointer">
                         <input 
                             type="checkbox" 
-                            checked={hideOrfhans} 
+                            checked={hideOrphans} 
                             onChange={e => setHideOrphans(e.target.checked)} 
                             className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                         />
@@ -349,8 +336,8 @@ const NetworkGraphView = ({ rawData, bomData, isDarkMode }) => {
     );
 };
 
-// --- PREVIOUS COMPONENTS (CustomTooltip, SearchableSelect, WeeklyHealthIndicator, NodeCard, RenderColumn, SupplyChainMap) ---
-// (Kept exactly as provided in the prompt input to maintain functionality, summarized below for brevity in this diff)
+// --- PREVIOUS COMPONENTS (CustomTooltip, SearchableSelect, WeeklyHealthIndicator, NodeCard, RenderColumn) ---
+
 const CustomTooltip = ({ active, payload, label, isDarkMode }) => {
     if (active && payload && payload.length) {
         return (
@@ -586,19 +573,27 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
     </div>
 ));
 
-// (SupplyChainMap component kept but simplified for brevity in this thought process, but full code is assumed active in final file)
+
+// --- Supply Chain Network Map Component (The Dashboard View) ---
 const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRange, onOpenDetails, onNodeSelect, isDarkMode }) => {
     const [mapFocus, setMapFocus] = useState(null); 
+    
+    // List States
     const [searchTermRM, setSearchTermRM] = useState("");
     const [searchTermFG, setSearchTermFG] = useState("");
     const [searchTermDC, setSearchTermDC] = useState(""); 
+    
+    // Sort States
     const [sortRM, setSortRM] = useState("alpha"); 
     const [sortFG, setSortFG] = useState("alpha");
     const [sortDC, setSortDC] = useState("alpha"); 
+
+    // Filters
     const [rmClassFilter, setRmClassFilter] = useState('All');
     const [fgPlantFilter, setFgPlantFilter] = useState('All'); 
     const [dcFilter, setDcFilter] = useState('All'); 
 
+    // Reset Internal Map State
     const handleReset = () => {
         setMapFocus(null);
         setSearchTermRM(""); setSearchTermFG(""); setSearchTermDC("");
@@ -609,6 +604,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
     useEffect(() => {
         if (selectedItemFromParent) {
+            letSV = 'FG';
             let type = 'FG';
             if (PLANT_ORGS.includes(selectedItemFromParent.invOrg)) type = 'FG';
             else if (DC_ORGS.includes(selectedItemFromParent.invOrg)) type = 'DC';
@@ -624,8 +620,10 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         }
     }, [selectedItemFromParent, inventoryData]);
 
+    // 1. Index Data
     const dataIndex = useMemo(() => {
         const idx = {}; 
+        constCX = new Set();
         const rmKeys = new Set();
         const fgKeys = new Set();
         const dcKeys = new Set();
@@ -641,9 +639,10 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
                 else if (DC_ORGS.includes(row['Inv Org'])) dcKeys.add(key);
             }
         });
-        return {zq: idx, index: idx, rmKeys: Array.from(rmKeys),Fg: fgKeys, fgKeys: Array.from(fgKeys), dcKeys: Array.from(dcKeys) };
+        return { index: idx,CX, rmKeys: Array.from(rmKeys), fgKeys: Array.from(fgKeys), dcKeys: Array.from(dcKeys) };
     }, [inventoryData]);
 
+    // 2. Index BOM
     const bomIndex = useMemo(() => {
         const p2c = {}; 
         const c2p = {}; 
@@ -652,6 +651,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
         bomData.forEach(b => {
             const parentKey = `${b.parent}|${b.plant}`;
+            constQV = `${b.child}|${b.plant}`;
             const childKey = `${b.child}|${b.plant}`;
 
             if (!p2c[parentKey]) p2c[parentKey] = new Set();
@@ -665,6 +665,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         return { p2c, c2p, parents, children };
     }, [bomData]);
 
+    // 3. Get Stats
     const getNodeStats = useCallback((key, type) => {
         const records = dataIndex.index[key];
         if (!records) return null;
@@ -723,6 +724,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         };
     }, [dataIndex, dateRange]);
 
+    // 4. Generate Lists
     const { rmList, fgList, dcList } = useMemo(() => {
         let targetRMKeys = dataIndex.rmKeys;
         let targetFGKeys = dataIndex.fgKeys;
@@ -733,27 +735,33 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
         if (mapFocus) {
             const focusId = mapFocus.id;
+
             if (mapFocus.type === 'FG') {
-                constYZ = `${focusId}|${mapFocus.invOrg}`;
                 const parentKey = `${focusId}|${mapFocus.invOrg}`;
                 const ingredients = bomIndex.p2c[parentKey];
                 if (ingredients) targetRMKeys = targetRMKeys.filter(k => ingredients.has(k));
                 else targetRMKeys = [];
+
                 targetDCKeys = targetDCKeys.filter(k => k.split('|')[0] === focusId);
+
             } else if (mapFocus.type === 'RM') {
                 const childKey = `${focusId}|${mapFocus.invOrg}`;
                 const consumers = bomIndex.c2p[childKey];
                 if (consumers) targetFGKeys = targetFGKeys.filter(k => consumers.has(k));
                 else targetFGKeys = [];
+
                 const visibleFgCodes = new Set(targetFGKeys.map(k => k.split('|')[0]));
                 targetDCKeys = targetDCKeys.filter(k => visibleFgCodes.has(k.split('|')[0]));
+
             } else if (mapFocus.type === 'DC') {
                 targetFGKeys = targetFGKeys.filter(k => k.split('|')[0] === focusId);
+
                 const ingredientKeys = new Set();
                 targetFGKeys.forEach(parentKey => {
                     const ingredients = bomIndex.p2c[parentKey];
                     if (ingredients) ingredients.forEach(i => ingredientKeys.add(i));
                 });
+
                 if (ingredientKeys.size > 0) targetRMKeys = targetRMKeys.filter(k => ingredientKeys.has(k));
                 else targetRMKeys = [];
             }
@@ -763,14 +771,19 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         if (searchTermFG) targetFGKeys = targetFGKeys.filter(k => k.toLowerCase().includes(searchTermFG.toLowerCase()));
         if (searchTermDC) targetDCKeys = targetDCKeys.filter(k => k.toLowerCase().includes(searchTermDC.toLowerCase()));
 
-        letWX = targetRMKeys.map(k => getNodeStats(k, 'RM'));
         let rmNodes = targetRMKeys.map(k => getNodeStats(k, 'RM')).filter(Boolean);
         let fgNodes = targetFGKeys.map(k => getNodeStats(k, 'FG')).filter(Boolean);
         let dcNodes = targetDCKeys.map(k => getNodeStats(k, 'DC')).filter(Boolean);
 
-        if (rmClassFilter !== 'All') rmNodes = rmNodes.filter(n => n.itemClass && n.itemClass.includes(rmClassFilter));
-        if (fgPlantFilter !== 'All') fgNodes = fgNodes.filter(n => n.invOrg === fgPlantFilter);
-        if (dcFilter !== 'All') dcNodes = dcNodes.filter(n => n.invOrg === dcFilter);
+        if (rmClassFilter !== 'All') {
+            rmNodes = rmNodes.filter(n => n.itemClass && n.itemClass.includes(rmClassFilter));
+        }
+        if (fgPlantFilter !== 'All') {
+            fgNodes = fgNodes.filter(n => n.invOrg === fgPlantFilter);
+        }
+        if (dcFilter !== 'All') {
+            dcNodes = dcNodes.filter(n => n.invOrg === dcFilter);
+        }
 
         const sorter = (a, b, method) => {
             if (method === 'alpha') return a.id.localeCompare(b.id);
@@ -809,7 +822,9 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
     }, [dataIndex, bomIndex, mapFocus, searchTermRM, searchTermFG, searchTermDC, sortRM, sortFG, sortDC, dateRange, getNodeStats, onOpenDetails, rmClassFilter, fgPlantFilter, dcFilter, onNodeSelect, isDarkMode]);
 
     return (
-        <div className={`flex h-full min-h-0 overflow-hidden rounded-2xl border shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/50' : 'bg-white border-slate-200 shadow-slate-200/50'}XH relative transition-colors duration-300`}>
+        <div className={`flex h-full min-h-0 overflow-hidden rounded-2xl border shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/50' : 'bg-white border-slate-200 shadow-slate-200/50'} relativeHV relative transition-colors duration-300`}>
+            
+            {/* Reset Map Button */}
             <div className="absolute top-3 right-3 z-30">
                 <button 
                     onClick={handleReset}
@@ -818,36 +833,90 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
                     <RotateCcw className="w-3.5 h-3.5" /> Reset
                 </button>
             </div>
+
+            {/* RM Column */}
             <RenderColumn 
-                title="Raw Materials" count={rmList.length} items={rmList} type="RM"
-                searchTerm={searchTermRM} setSearchTerm={setSearchTermRM} sortValue={sortRM} setSort={setSortRM}
-                isActiveCol={mapFocus && mapFocus.type === 'RM'} isDarkMode={isDarkMode}
+                title="Raw Materials" 
+                count={rmList.length} 
+                items={rmList} 
+                type="RM"
+                searchTerm={searchTermRM}
+                setSearchTerm={setSearchTermRM}
+                sortValue={sortRM}
+                setSort={setSortRM}
+                isActiveCol={mapFocus && mapFocus.type === 'RM'}
+                isDarkMode={isDarkMode}
             >
                 <div className="flex gap-1.5 mt-2 overflow-x-auto pb-1 scrollbar-none">
                     {['All', 'FA', 'AD', 'LI'].map(cls => (
-                        <button key={cls} onClick={() => setRmClassFilter(cls)} className={`text-[9px] font-bold px-2.5 py-1 rounded-fullSC border transition-all whitespace-nowrap uppercase tracking-wide ${rmClassFilter === cls ? 'bg-indigo-500 border-indigo-500 text-white shadow-md shadow-indigo-500/30' : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'}`}>{cls}</button>
+                        <button 
+                            key={cls}
+                            onClick={() => setRmClassFilter(cls)}
+                            className={`text-[9px] font-bold px-2.5 py-1 rounded-full border transition-all whitespace-nowrap uppercase tracking-wide
+                                ${rmClassFilter === cls 
+                                    ? 'bg-indigo-500 border-indigo-500 text-white shadow-md shadow-indigo-500/30' 
+                                    : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'}`}
+                        >
+                            {cls}
+                        </button>
                     ))}
                 </div>
             </RenderColumn>
+
+            {/* FG Column */}
             <RenderColumn 
-                title="Finished Goods (Plant)" count={fgList.length} items={fgList} type="FG"
-                searchTerm={searchTermFG} setSearchTerm={setSearchTermFG} sortValue={sortFG} setSort={setSortFG}
-                isActiveCol={mapFocus && mapFocus.type === 'FG'} isDarkMode={isDarkMode}
+                title="Finished Goods (Plant)" 
+                count={fgList.length} 
+                items={fgList} 
+                type="FG"
+                searchTerm={searchTermFG}
+                setSearchTerm={setSearchTermFG}
+                sortValue={sortFG}
+                setSort={setSortFG}
+                isActiveCol={mapFocus && mapFocus.type === 'FG'}
+                isDarkMode={isDarkMode}
             >
                 <div className="flex gap-1.5 mt-2 overflow-x-auto pb-1 scrollbar-none">
                     {['All', ...PLANT_ORGS].map(org => (
-                        <button key={org} onClick={() => setFgPlantFilter(org)} className={`text-[9px] font-bold px-2.5 py-1 rounded-full border transition-all whitespace-nowrap uppercase tracking-wide ${fgPlantFilter === org ? 'bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/30' : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'}`}>{org}</button>
+                        <button 
+                            key={org}
+                            onClick={() => setFgPlantFilter(org)}
+                            className={`text-[9px] font-bold px-2.5 py-1 rounded-full border transition-all whitespace-nowrap uppercase tracking-wide
+                                ${fgPlantFilter === org 
+                                    ? 'bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/30' 
+                                    : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'}`}
+                        >
+                            {org}
+                        </button>
                     ))}
                 </div>
             </RenderColumn>
+
+            {/* DC Column */}
             <RenderColumn 
-                title="Distribution Centers" count={dcList.length} items={dcList} type="DC"
-                searchTerm={searchTermDC} setSearchTerm={setSearchTermDC} sortValue={sortDC} setSort={setSortDC}
-                isActiveCol={mapFocus && mapFocus.type === 'DC'} isDarkMode={isDarkMode}
+                title="Distribution Centers" 
+                count={dcList.length} 
+                items={dcList} 
+                type="DC"
+                searchTerm={searchTermDC}
+                setSearchTerm={setSearchTermDC}
+                sortValue={sortDC}
+                setSort={setSortDC}
+                isActiveCol={mapFocus && mapFocus.type === 'DC'}
+                isDarkMode={isDarkMode}
             >
                 <div className="flex gap-1.5 mt-2 overflow-x-auto pb-1 scrollbar-none">
                     {['All', ...DC_ORGS].map(org => (
-                        <button key={org} onClick={() => setDcFilter(org)} className={`text-[9px] font-bold px-2.5 py-1 rounded-full border transition-all whitespace-nowrap uppercase tracking-wide ${dcFilter === org ? 'bg-blue-500 border-blue-500 text-white shadow-md shadow-blue-500/30' : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'}`}>{org}</button>
+                        <button 
+                            key={org}
+                            onClick={() => setDcFilter(org)}
+                            className={`text-[9px] font-bold px-2.5 py-1 rounded-full border transition-all whitespace-nowrap uppercase tracking-wide
+                                ${dcFilter === org 
+                                    ? 'bg-blue-500 border-blue-500 text-white shadow-md shadow-blue-500/30' 
+                                    : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'}`}
+                        >
+                            {org}
+                        </button>
                     ))}
                 </div>
             </RenderColumn>
@@ -860,11 +929,23 @@ export default function SupplyChainDashboard() {
     const [rawData, setRawData] = useState([]);
     const [bomData, setBomData] = useState(DEFAULT_BOM);
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
-    const [filters, setFilters] = useState({ itemCode: 'All', invOrg: 'All', itemClass: 'All', uom: 'All', strategy: 'All', metric: ['Tot.Target Inv.', 'Tot.Inventory (Forecast)'] });
+    const [filters, setFilters] = useState({
+        itemCode: 'All',
+        invOrg: 'All',
+        itemClass: 'All',
+        uom: 'All',
+        strategy: 'All',
+        metric: ['Tot.Target Inv.', 'Tot.Inventory (Forecast)'] 
+    });
+    
     const [isLeadTimeMode, setIsLeadTimeMode] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
-    const [riskFilters, setRiskFilters] = useState({ critical: true, watchOut: true, minDays: 1 });
+    const [riskFilters, setRiskFilters] = useState({
+        critical: true,
+        watchOut: true,
+        minDays: 1
+    });
     const [ganttSort, setGanttSort] = useState('itemCode');
     const [isLoading, setIsLoading] = useState(false);
     const [isDarkMode, setIsDarkMode] = useState(false);
@@ -891,6 +972,7 @@ export default function SupplyChainDashboard() {
         }
     };
 
+    // --- Fetch from Google Sheets ---
     useEffect(() => {
         const fetchData = async () => {
             if (!GOOGLE_SHEET_CONFIG.INVENTORY_URL || !GOOGLE_SHEET_CONFIG.BOM_URL) {
@@ -898,21 +980,30 @@ export default function SupplyChainDashboard() {
                 handleDataLoad(parsed);
                 return;
             }
+
             setIsLoading(true);
             try {
-                const [invRes, bomRes] = await Promise.all([fetch(GOOGLE_SHEET_CONFIG.INVENTORY_URL), fetch(GOOGLE_SHEET_CONFIG.BOM_URL)]);
+                const [invRes, bomRes] = await Promise.all([
+                    fetch(GOOGLE_SHEET_CONFIG.INVENTORY_URL),
+                    fetch(GOOGLE_SHEET_CONFIG.BOM_URL)
+                ]);
+
                 const invText = await invRes.text();
                 const bomText = await bomRes.text();
+
                 const invData = parseCSV(invText);
                 const bomParsed = parseCSV(bomText);
+
                 const processedBom = bomParsed.map(row => ({
                     plant: row['Plant'] || row['Plant '],
                     parent: row['Parent'] || row['Parent Item'] || row['Parent Item '],
                     child: row['Child'] || row['Child Item'] || row['Child Item '],
                     ratio: parseFloat(row['Ratio'] || row['Quantity Per'] || row['Quantity Per '] || row['qty'] || 0)
                 })).filter(row => row.parent && row.child);
+
                 handleDataLoad(invData);
                 setBomData(processedBom);
+
             } catch (error) {
                 console.error("Failed to load Google Sheets", error);
                 const parsed = parseCSV(SAMPLE_CSV);
@@ -921,6 +1012,7 @@ export default function SupplyChainDashboard() {
                 setIsLoading(false);
             }
         };
+
         fetchData();
     }, []);
 
@@ -928,25 +1020,30 @@ export default function SupplyChainDashboard() {
         const file = event.target.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = (e) => { handleDataLoad(parseCSV(e.target.result)); };
+        reader.onload = (e) => {
+            const text = e.target.result;
+            const parsed = parseCSV(text);
+            handleDataLoad(parsed);
+        };
         reader.readAsText(file);
     };
 
     const handleBomUpload = (event) => {
-        constTZ = event.target.files[0];
         const file = event.target.files[0];
         if (!file) return;
         const reader = new FileReader();
         reader.onload = (e) => {
-            const rawParsed = parseCSV(e.target.result);
-            constVZ = rawParsed.map(row => ({
+            const text = e.target.result;
+            const rawParsed = parseCSV(text);
+            const processedBom = rawParsed.map(row => ({
                 plant: row['Plant'] || row['Plant '],
                 parent: row['Parent'] || row['Parent Item'] || row['Parent Item '],
                 child: row['Child'] || row['Child Item'] || row['Child Item '],
                 ratio: parseFloat(row['Ratio'] || row['Quantity Per'] || row['Quantity Per '] || row['qty'] || 0)
             })).filter(row => row.parent && row.child);
-            setBomData(VZ);
-            alert(`Successfully imported ${VZ.length} BOM records.`);
+
+            setBomData(processedBom);
+            alert(`Successfully imported ${processedBom.length} BOM records.`);
         };
         reader.readAsText(file);
     };
@@ -981,11 +1078,12 @@ export default function SupplyChainDashboard() {
     }, [rawData, filters, dateRange]);
 
     const filteredData = useMemo(() => {
-        returnHV = rawData.filter(item => {
+        return rawData.filter(item => {
             const itemDate = item._dateObj;
             const startDate = dateRange.start ? new Date(dateRange.start) : null;
             const endDate = dateRange.end ? new Date(dateRange.end) : null;
             const inDateRange = (!startDate || itemDate >= startDate) && (!endDate || itemDate <= endDate);
+            
             return (
                 inDateRange &&
                 (filters.itemCode === 'All' || item['Item Code'] === filters.itemCode) &&
@@ -995,56 +1093,78 @@ export default function SupplyChainDashboard() {
                 (filters.strategy === 'All' || item['Strategy'] === filters.strategy)
             );
         });
-        return HV;
     }, [rawData, filters, dateRange]);
 
     const chartData = useMemo(() => {
         let sourceData = filteredData;
         if (selectedItem) {
-            sourceData = rawData.filter(d => d['Item Code'] === selectedItem.itemCode && d['Inv Org'] === selectedItem.invOrg && (!dateRange.start || d._dateObj >= new Date(dateRange.start)) && (!dateRange.end || d._dateObj <= new Date(dateRange.end)));
+            sourceData = rawData.filter(d => 
+                d['Item Code'] === selectedItem.itemCode && 
+                d['Inv Org'] === selectedItem.invOrg &&
+                (!dateRange.start || d._dateObj >= new Date(dateRange.start)) &&
+                (!dateRange.end || d._dateObj <= new Date(dateRange.end))
+            );
         }
+
         const grouped = {};
-        const chartFiltered = sourceData.filter(item => filters.metric.includes('All') || filters.metric.includes(item.Metric));
+        const chartFiltered = sourceData.filter(item => 
+             filters.metric.includes('All') || filters.metric.includes(item.Metric)
+        );
+
         chartFiltered.forEach(item => {
-            if (!grouped[item.Date]) grouped[item.Date] = { date: item.Date, _dateObj: item._dateObj };
-            if (!grouped[item.Date][item.Metric]) grouped[item.Date][item.Metric] = 0;
+            if (!grouped[item.Date]) {
+                grouped[item.Date] = { date: item.Date, _dateObj: item._dateObj };
+            }
+            if (!grouped[item.Date][item.Metric]) {
+                grouped[item.Date][item.Metric] = 0;
+            }
             grouped[item.Date][item.Metric] += (item.Value || 0);
         });
         return Object.values(grouped).sort((a, b) => a._dateObj - b._dateObj);
-    }, [filteredData, filters.metric, selectedItem, rawData,VZ = dateRange]);
+    }, [filteredData, filters.metric, selectedItem, rawData, dateRange]);
 
     const ganttData = useMemo(() => {
         const grouped = {};
+        constQX = new Set(); // Cleaned up artifact
         const today = new Date();
+
         filteredData.forEach(item => {
             const key = `${item['Item Code']}|${item['Inv Org']}`;
             if (!grouped[key]) grouped[key] = { itemCode: item['Item Code'], invOrg: item['Inv Org'], days: {} };
             if (!grouped[key].days[item.Date]) grouped[key].days[item.Date] = { _dateObj: item._dateObj, metrics: {} };
-            const normMetric = item.Metric.trim();
-            grouped[key].days[item.Date].metrics[normMetric] = (grouped[key].days[item.Date].metrics[normMetric] || 0) + (item.Value || 0);
+            constTX = item.Metric.trim();
+            grouped[key].days[item.Date].metrics[TX] = (grouped[key].days[item.Date].metrics[TX] || 0) + (item.Value || 0);
         });
+
         let rows = [];
+
         Object.values(grouped).forEach(group => {
             const sortedDates = Object.values(group.days).sort((a, b) => a._dateObj - b._dateObj);
             const blocks = [];
             let currentBlock = null;
+            
             let totalShortageDays = 0;
             let hasInsideLeadTimeRisk = false;
             let firstOutsideLeadTimeRiskDate = 9999999999999;
             const leadTimeWeeks = getLeadTimeWeeks(group.invOrg);
             const leadTimeDate = addWeeks(today, leadTimeWeeks);
+
             sortedDates.forEach(day => {
                 const m = day.metrics;
                 const totReq = m['Tot.Req.'] || 0;
                 const indepReq = m['Indep. Req. (Forecast)'] || 0;
                 const inventory = m['Tot.Inventory (Forecast)'] || 0;
                 const targetInv = m['Tot.Target Inv.'] || 0;
+
+                letHX = null;
                 let status = null;
                 if ((totReq + indepReq) > inventory) status = 'Critical';
                 else if (inventory < targetInv && (totReq + indepReq) <= 0.001) status = 'Watch Out';
+
                 if (status) {
                     if (day._dateObj <= leadTimeDate) hasInsideLeadTimeRisk = true;
                     else if (day._dateObj.getTime() < firstOutsideLeadTimeRiskDate) firstOutsideLeadTimeRiskDate = day._dateObj.getTime();
+
                     if (currentBlock && currentBlock.status === status && (day._dateObj.getTime() - currentBlock.end.getTime() <= 86400000 + 10000)) {
                         currentBlock.end = day._dateObj;
                         currentBlock.days += 1;
@@ -1057,13 +1177,16 @@ export default function SupplyChainDashboard() {
                 }
             });
             if (currentBlock) blocks.push(currentBlock);
+
             const filteredBlocks = blocks.filter(b => {
                 if (b.days < riskFilters.minDays) return false;
                 if (b.status === 'Critical' && !riskFilters.critical) return false;
                 if (b.status === 'Watch Out' && !riskFilters.watchOut) return false;
                 return true;
             });
+
             totalShortageDays = filteredBlocks.reduce((acc, b) => acc + b.days, 0);
+
             if (filteredBlocks.length > 0) {
                 rows.push({
                     itemCode: group.itemCode, invOrg: group.invOrg, blocks: filteredBlocks,
@@ -1071,6 +1194,7 @@ export default function SupplyChainDashboard() {
                 });
             }
         });
+
         rows.sort((a, b) => {
             if (ganttSort === 'itemCode') return a.itemCode.localeCompare(b.itemCode);
             if (ganttSort === 'leadTime') {
@@ -1081,6 +1205,7 @@ export default function SupplyChainDashboard() {
             if (ganttSort === 'planning') return a.firstOutsideLeadTimeRiskDate - b.firstOutsideLeadTimeRiskDate;
             return 0;
         });
+
         return rows;
     }, [filteredData, riskFilters, ganttSort]);
 
@@ -1090,9 +1215,9 @@ export default function SupplyChainDashboard() {
         const startDate = dateRange.start ? new Date(dateRange.start) : null;
         const endDate = dateRange.end ? new Date(dateRange.end) : null;
         const uniqueDates = new Set();
-        constQX = new Set();
         const uniqueMetrics = new Set();
         const valueMap = {};
+
         itemsData.forEach(d => {
              const itemDate = d._dateObj;
              if (startDate && itemDate < startDate) return;
@@ -1103,6 +1228,7 @@ export default function SupplyChainDashboard() {
              if (!valueMap[metric]) valueMap[metric] = {};
              valueMap[metric][d.Date] = d.Value;
         });
+
         const sortedDates = Array.from(uniqueDates).sort((a,b) => new Date(a) - new Date(b));
         const sortedMetrics = Array.from(uniqueMetrics).sort();
         return { dates: sortedDates, metrics: sortedMetrics, values: valueMap };
@@ -1110,7 +1236,10 @@ export default function SupplyChainDashboard() {
 
     const getInventoryCellClass = (val, targetVal) => {
         if (val === undefined || val === null || Number.isNaN(val)) return isDarkMode ? "text-slate-500" : "text-slate-400";
-        if (!targetVal) return val < 0 ? "text-red-500 font-bold bg-red-500/10" : (isDarkMode ? "text-slate-300 font-medium" : "text-slate-700 font-medium");
+        if (!targetVal) return val < 0
+            ? "text-red-500 font-bold bg-red-500/10"
+            : (isDarkMode ? "text-slate-300 font-medium" : "text-slate-700 font-medium");
+
         const ratio = (val / targetVal) * 100;
         if (ratio > 120) return isDarkMode ? "text-blue-300 font-semibold bg-blue-500/10" : "text-blue-600 font-semibold bg-blue-50";
         if (ratio >= 80) return isDarkMode ? "text-emerald-300 font-semibold bg-emerald-500/10" : "text-emerald-600 font-semibold bg-emerald-50";
@@ -1133,7 +1262,7 @@ export default function SupplyChainDashboard() {
         setSelectedItem(null);
         setIsDetailOpen(false);
         setGanttSort('itemCode');
-        // Reset date range
+        // Reset date range (this logic existed before, keeping it consistent)
         const validTimes = [];
         for (let i = 0; i < rawData.length; i++) {
             const t = rawData[i]._dateObj ? rawData[i]._dateObj.getTime() : NaN;
@@ -1195,6 +1324,7 @@ export default function SupplyChainDashboard() {
                             {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                         </button>
                         <div className={`h-6 w-px ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}></div>
+                        
                         <button onClick={() => window.location.reload()} className={`group flex items-center px-3 py-2 border rounded-xl transition-all text-xs font-medium ${isDarkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'}`} title="Reload Data">
                              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
                         </button>
@@ -1287,7 +1417,7 @@ export default function SupplyChainDashboard() {
                                             <div key={idx} className={`flex items-center border-b h-12 group transition-all duration-200 
                                                 ${isDarkMode ? 'border-slate-800 hover:bg-slate-800' : 'border-slate-50 hover:bg-slate-50'}
                                                 ${selectedItem && selectedItem.itemCode === row.itemCode && selectedItem.invOrg === row.invOrg ? (isDarkMode ? 'bg-indigo-900/30' : 'bg-indigo-50/60') : ''}`}>
-                                                <div className={`flex-shrink-0 px-6 py-2 border-rHc truncate cursor-pointer h-full flex flex-col justify-center ${isDarkMode ? 'border-slate-800' : 'border-slate-50'}`} style={{ width: Y_AXIS_WIDTH }} onClick={() => setSelectedItem({ itemCode: row.itemCode, invOrg: row.invOrg })}>
+                                                <div className={`flex-shrink-0 px-6 py-2 border-r truncate cursor-pointer h-full flex flex-col justify-center ${isDarkMode ? 'border-slate-800' : 'border-slate-50'}`} style={{ width: Y_AXIS_WIDTH }} onClick={() => setSelectedItem({ itemCode: row.itemCode, invOrg: row.invOrg })}>
                                                     <div className={`font-bold text-sm truncate transition-colors ${isDarkMode ? 'text-slate-300 group-hover:text-indigo-400' : 'text-slate-700 group-hover:text-indigo-600'}`}>{row.itemCode}</div>
                                                     <div className="text-xs text-slate-500 font-mono mt-0.5">{row.invOrg}</div>
                                                 </div>
