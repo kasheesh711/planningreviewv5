@@ -3,7 +3,7 @@ import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine, ComposedChart
 } from 'recharts';
 import {
-    Upload, Filter, Package, Calendar, ChevronDown, Search,HZ, Clock,TZ, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, ArrowLeftRight, MapPin, RefreshCw, RotateCcw, PanelLeft, Sun, Moon, MoreHorizontal, Share2, LayoutDashboard
+    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, ArrowLeftRight, MapPin, RefreshCw, RotateCcw, PanelLeft, Sun, Moon, MoreHorizontal
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -45,11 +45,6 @@ const parseCSV = (csvText) => {
     return data;
 };
 
-constSx = (dateObj) => {
-    if (!dateObj || isNaN(dateObj.getTime())) return '';
-    return dateObj.toISOString().split('T')[0];
-};
-
 const toInputDate = (dateObj) => {
     if (!dateObj || isNaN(dateObj.getTime())) return '';
     return dateObj.toISOString().split('T')[0];
@@ -87,256 +82,6 @@ SF,RM,BAB250-MR1,MYBGPM,FA,KG,MTS,BAB250-MR1/MYBGPM/FA/KG/MTS,Tot.Target Inv.,0,
 const DEFAULT_BOM = [
     { parent: 'AAG620-MR2', child: 'BAB250-MR1', ratio: 0.5, plant: 'MYBGPM' }, 
 ];
-
-// --- Network Analysis Component (Obsidian Style) ---
-const NetworkGraphView = ({ rawData, bomData, isDarkMode }) => {
-    const canvasRef = useRef(null);
-    const [hideOrphans, setHideOrphans] = useState(false);
-    const [metricMode, setMetricMode] = useState('Type'); // Type, Health
-    const [hoveredNode, setHoveredNode] = useState(null);
-    const animationRef = useRef(null);
-
-    // 1. Prepare Graph Data
-    const graphData = useMemo(() => {
-        const nodesMap = new Map();
-        const links = [];
-
-        // Extract Nodes from Inventory Data
-        rawData.forEach(row => {
-            const id = `${row['Item Code']}|${row['Inv Org']}`;
-            if (!nodesMap.has(id)) {
-                let type = 'RM';
-                if (PLANT_ORGS.includes(row['Inv Org'])) type = 'FG';
-                else if (DC_ORGS.includes(row['Inv Org'])) type = 'DC';
-                else type = row.Type || 'RM';
-
-                nodesMap.set(id, {
-                    id,
-                    itemCode: row['Item Code'],
-                    invOrg: row['Inv Org'],
-                    type,
-                    x: Math.random() * 800,
-                    y: Math.random() * 600,
-                    vx: 0,
-                    vy: 0,
-                    degree: 0,
-                    currentInv: 0,
-                    targetInv: 0
-                });
-            }
-            // Aggregate latest Inventory for Metrics
-            const node = nodesMap.get(id);
-            if (row.Metric === 'Tot.Inventory (Forecast)' && row._dateObj) {
-                 // Simple logic: use the first value found (Start) or latest. 
-                 if (node.currentInv === 0) node.currentInv = row.Value;
-            }
-            if (row.Metric === 'Tot.Target Inv.' && row._dateObj) {
-                 if (node.targetInv === 0) node.targetInv = row.Value;
-            }
-        });
-
-        const nodes = Array.from(nodesMap.values());
-
-        // Create Links from BOM (Parent -> Child)
-        bomData.forEach(bom => {
-            const parentId = `${bom.parent}|${bom.plant}`;
-            const childId = `${bom.child}|${bom.plant}`;
-            
-            if (nodesMap.has(parentId) && nodesMap.has(childId)) {
-                links.push({ source: parentId, target: childId, type: 'BOM' });
-                nodesMap.get(parentId).degree++;
-                nodesMap.get(childId).degree++;
-            }
-        });
-
-        // Create Links for Transfers (Plant FG -> DC FG)
-        const plantNodes = nodes.filter(n => n.type === 'FG');
-        const dcNodes = nodes.filter(n => n.type === 'DC');
-
-        plantNodes.forEach(pNode => {
-            dcNodes.forEach(dNode => {
-                if (pNode.itemCode === dNode.itemCode) {
-                    links.push({ source: pNode.id, target: dNode.id, type: 'FLOW' });
-                    pNode.degree++;
-                    dNode.degree++;
-                }
-            });
-        });
-
-        return { nodes, links, nodesMap };
-    }, [rawData, bomData]);
-
-    // 2. Simulation Loop
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        canvas.width = canvas.offsetWidth;
-        canvas.height = canvas.offsetHeight;
-        
-        let nodes = graphData.nodes.map(n => ({...n})); // Clone for local mutation
-        let links = graphData.links.map(l => ({
-            source: nodes.find(n => n.id === l.source),
-            target: nodes.find(n => n.id === l.target),
-            type: l.type
-        })).filter(l => l.source && l.target);
-
-        if (hideOrphans) {
-            const activeIds = new Set();
-            links.forEach(l => { activeIds.add(l.source.id); activeIds.add(l.target.id); });
-            nodes = nodes.filter(n => activeIds.has(n.id));
-        }
-
-        // Center initialization
-        const cx = canvas.width / 2;
-        const cy = canvas.height / 2;
-        nodes.forEach(n => { n.x = cx + (Math.random() - 0.5) * 200; n.y = cy + (Math.random() - 0.5) * 200; });
-
-        const tick = () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Physics
-            // 1. Repulsion
-            for (let i = 0; i < nodes.length; i++) {
-                for (let j = i + 1; j < nodes.length; j++) {
-                    const dx = nodes[i].x - nodes[j].x;
-                    const dy = nodes[i].y - nodes[j].y;
-                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                    const force = 2000 / (dist * dist); // Coulomb-like
-                    const fx = (dx / dist) * force;
-                    const fy = (dy / dist) * force;
-                    nodes[i].vx += fx; nodes[i].vy += fy;
-                    nodes[j].vx -= fx; nodes[j].vy -= fy;
-                }
-            }
-            
-            // 2. Attraction (Springs)
-            links.forEach(link => {
-                const dx = link.target.x - link.source.x;
-                const dy = link.target.y - link.source.y;
-                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                const force = (dist - 60) * 0.05; // Hooke-like
-                const fx = (dx / dist) * force;
-                const fy = (dy / dist) * force;
-                link.source.vx += fx; link.source.vy += fy;
-                link.target.vx -= fx; link.target.vy -= fy;
-            });
-
-            // 3. Center Gravity
-            nodes.forEach(n => {
-                n.vx += (cx - n.x) * 0.015;
-                n.vy += (cy - n.y) * 0.015;
-                n.vx *= 0.9; // Damping
-                n.vy *= 0.9;
-                n.x += n.vx;
-                n.y += n.vy;
-            });
-
-            // Draw Links
-            ctx.lineWidth = 1;
-            links.forEach(link => {
-                ctx.beginPath();
-                ctx.moveTo(link.source.x, link.source.y);
-                ctx.lineTo(link.target.x, link.target.y);
-                ctx.strokeStyle = isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
-                ctx.stroke();
-            });
-
-            // Draw Nodes
-            nodes.forEach(node => {
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, 4, 0, Math.PI * 2);
-                
-                // Color Logic
-                if (metricMode === 'Health') {
-                   const ratio = node.targetInv > 0 ? node.currentInv / node.targetInv : 1;
-                   if (ratio < 0.2) ctx.fillStyle = '#ef4444'; // Critical
-                   else if (ratio < 0.8) ctx.fillStyle = '#f59e0b'; // Warning
-                   else ctx.fillStyle = '#10b981'; // Good
-                } else {
-                   // Type Logic
-                   if (node.type === 'RM') ctx.fillStyle = '#6366f1';
-                   else if (node.type === 'FG') ctx.fillStyle = '#10b981';
-                   else ctx.fillStyle = '#06b6d4';
-                }
-                
-                ctx.fill();
-                
-                // Hover Effect (simple distance check could go here, omitted for brevity)
-                if (hoveredNode && hoveredNode.id === node.id) {
-                    ctx.strokeStyle = isDarkMode ? '#fff' : '#000';
-                    ctx.lineWidth = 2;
-                    ctx.stroke();
-                }
-            });
-
-            animationRef.current = requestAnimationFrame(tick);
-        };
-
-        tick();
-        return () => cancelAnimationFrame(animationRef.current);
-    }, [graphData, hideOrphans, metricMode, isDarkMode, hoveredNode]);
-
-    // Interaction
-    const handleMouseMove = (e) => {
-        // Simple placeholder for interactivity
-    };
-
-    return (
-        <div className={`flex flex-col h-full rounded-2xl border shadow-sm overflow-hidden ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-            {/* Controls */}
-            <div className={`p-4 border-b flex items-center justify-between ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-white'}`}>
-                 <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                        <Network className="w-5 h-5 text-indigo-500" />
-                        <h3 className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Network Brain</h3>
-                    </div>
-                    <div className={`h-6 w-px ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`} />
-                    <label className="flex items-center gap-2 text-xs cursor-pointer">
-                        <input 
-                            type="checkbox" 
-                            checked={hideOrphans} 
-                            onChange={e => setHideOrphans(e.target.checked)} 
-                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Hide Orphans</span>
-                    </label>
-                    
-                    <div className="flex items-center gap-2">
-                        <span className={`text-xs font-medium ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Color By:</span>
-                        <select 
-                            value={metricMode} 
-                            onChange={e => setMetricMode(e.target.value)}
-                            className={`text-xs border-none rounded-lg py-1 pl-2 pr-8 font-medium focus:ring-1 focus:ring-indigo-500 cursor-pointer ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}`}
-                        >
-                            <option value="Type">Item Type</option>
-                            <option value="Health">Stock Health</option>
-                        </select>
-                    </div>
-                 </div>
-                 <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500">
-                    <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-indigo-500"></div>RM</div>
-                    <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500"></div>FG</div>
-                    <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-cyan-500"></div>DC</div>
-                 </div>
-            </div>
-            
-            {/* Canvas */}
-            <div className="flex-1 relative bg-[#0f0f11] cursor-move overflow-hidden">
-                <div className="absolute top-4 left-4 pointer-events-none select-none text-white/20 text-xs font-mono">
-                    Force Directed Layout • {graphData.nodes.length} Nodes • {graphData.links.length} Edges
-                </div>
-                <canvas 
-                    ref={canvasRef} 
-                    className="w-full h-full block"
-                    onMouseMove={handleMouseMove}
-                />
-            </div>
-        </div>
-    );
-};
-
-// --- PREVIOUS COMPONENTS (CustomTooltip, SearchableSelect, WeeklyHealthIndicator, NodeCard, RenderColumn) ---
 
 const CustomTooltip = ({ active, payload, label, isDarkMode }) => {
     if (active && payload && payload.length) {
@@ -466,6 +211,7 @@ const SearchableSelect = ({ label, value, options, onChange, multi = false, isDa
     );
 };
 
+// --- Weekly Health Indicator ---
 const WeeklyHealthIndicator = React.memo(({ data, isDarkMode }) => {
     if (!data || data.length === 0) return <div className="text-[9px] opacity-40 mt-1.5">No forecast data</div>;
 
@@ -487,6 +233,7 @@ const WeeklyHealthIndicator = React.memo(({ data, isDarkMode }) => {
     );
 });
 
+// --- Node Card ---
 const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail, isDarkMode }) => {
     const baseClasses = isDarkMode 
         ? "bg-slate-800/50 border-slate-700 hover:bg-slate-800 hover:border-slate-600" 
@@ -537,6 +284,7 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail, isDarkMod
     );
 });
 
+// --- Render Column Helper ---
 const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSearchTerm, setSort, sortValue, isActiveCol, isDarkMode, children }) => (
     <div className={`flex flex-col h-full min-h-0 border-r ${isDarkMode ? 'border-slate-800 bg-slate-900/20' : 'border-slate-200/60 bg-slate-50/30'} ${isActiveCol ? (isDarkMode ? 'bg-indigo-900/10' : 'bg-indigo-50/30') : ''} min-w-[300px] flex-1`}>
         <div className={`p-4 border-b backdrop-blur-sm sticky top-0 z-10 ${isDarkMode ? 'border-slate-800 bg-slate-900/80' : 'border-slate-200/60 bg-white/80'}`}>
@@ -547,6 +295,7 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
                 </h3>
                 <div className="flex gap-1">
                     <button onClick={() => setSort('alpha')} className={`p-1.5 rounded transition-colors ${sortValue === 'alpha' ? (isDarkMode ? 'bg-slate-800 text-indigo-400' : 'bg-white shadow-sm text-indigo-600') : 'opacity-40 hover:opacity-100'}`} title="Sort Alpha"><ArrowUpDown className="w-3.5 h-3.5" /></button>
+                    {/* CHANGED: 'invAsc' means Lowest First */}
                     <button onClick={() => setSort('invAsc')} className={`p-1.5 rounded transition-colors ${sortValue === 'invAsc' ? (isDarkMode ? 'bg-slate-800 text-indigo-400' : 'bg-white shadow-sm text-indigo-600') : 'opacity-40 hover:opacity-100'}`} title="Sort Inv (Low-to-High)"><Activity className="w-3.5 h-3.5" /></button>
                 </div>
             </div>
@@ -574,7 +323,7 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
 ));
 
 
-// --- Supply Chain Network Map Component (The Dashboard View) ---
+// --- Supply Chain Network Map Component ---
 const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRange, onOpenDetails, onNodeSelect, isDarkMode }) => {
     const [mapFocus, setMapFocus] = useState(null); 
     
@@ -604,7 +353,6 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
     useEffect(() => {
         if (selectedItemFromParent) {
-            letSV = 'FG';
             let type = 'FG';
             if (PLANT_ORGS.includes(selectedItemFromParent.invOrg)) type = 'FG';
             else if (DC_ORGS.includes(selectedItemFromParent.invOrg)) type = 'DC';
@@ -622,8 +370,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
     // 1. Index Data
     const dataIndex = useMemo(() => {
-        const idx = {}; 
-        constCX = new Set();
+        const idx = {}; // Key: "ItemCode|InvOrg"
         const rmKeys = new Set();
         const fgKeys = new Set();
         const dcKeys = new Set();
@@ -639,19 +386,18 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
                 else if (DC_ORGS.includes(row['Inv Org'])) dcKeys.add(key);
             }
         });
-        return { index: idx,CX, rmKeys: Array.from(rmKeys), fgKeys: Array.from(fgKeys), dcKeys: Array.from(dcKeys) };
+        return { index: idx, rmKeys: Array.from(rmKeys), fgKeys: Array.from(fgKeys), dcKeys: Array.from(dcKeys) };
     }, [inventoryData]);
 
     // 2. Index BOM
     const bomIndex = useMemo(() => {
-        const p2c = {}; 
-        const c2p = {}; 
+        const p2c = {}; // Parent+Plant -> Children+Plant
+        const c2p = {}; // Child+Plant -> Parents+Plant
         const parents = new Set();
         const children = new Set();
 
         bomData.forEach(b => {
             const parentKey = `${b.parent}|${b.plant}`;
-            constQV = `${b.child}|${b.plant}`;
             const childKey = `${b.child}|${b.plant}`;
 
             if (!p2c[parentKey]) p2c[parentKey] = new Set();
@@ -709,6 +455,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
             return (a.Start ?? 0) - (b.Start ?? 0);
         });
 
+        // Show the starting forecast inventory value
         const currentInv = invRows.length > 0 ? invRows[0].Value : 0;
         const status = currentInv < 0 ? 'Critical' : (currentInv < 1000 ? 'Low' : 'Good');
 
@@ -787,6 +534,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
         const sorter = (a, b, method) => {
             if (method === 'alpha') return a.id.localeCompare(b.id);
+            // invAsc = Lowest Inventory First (Ascending)
             if (method === 'invAsc') return a.currentInv - b.currentInv;
             return 0;
         };
@@ -822,7 +570,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
     }, [dataIndex, bomIndex, mapFocus, searchTermRM, searchTermFG, searchTermDC, sortRM, sortFG, sortDC, dateRange, getNodeStats, onOpenDetails, rmClassFilter, fgPlantFilter, dcFilter, onNodeSelect, isDarkMode]);
 
     return (
-        <div className={`flex h-full min-h-0 overflow-hidden rounded-2xl border shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/50' : 'bg-white border-slate-200 shadow-slate-200/50'} relativeHV relative transition-colors duration-300`}>
+        <div className={`flex h-full min-h-0 overflow-hidden rounded-2xl border shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/50' : 'bg-white border-slate-200 shadow-slate-200/50'} relative transition-colors duration-300`}>
             
             {/* Reset Map Button */}
             <div className="absolute top-3 right-3 z-30">
@@ -925,22 +673,24 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 };
 
 export default function SupplyChainDashboard() {
-    const [activeView, setActiveView] = useState('dashboard'); // 'dashboard' | 'network'
     const [rawData, setRawData] = useState([]);
     const [bomData, setBomData] = useState(DEFAULT_BOM);
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
+    
+    // --- DEFAULT METRIC CHANGE ---
     const [filters, setFilters] = useState({
         itemCode: 'All',
         invOrg: 'All',
         itemClass: 'All',
         uom: 'All',
         strategy: 'All',
-        metric: ['Tot.Target Inv.', 'Tot.Inventory (Forecast)'] 
+        metric: ['Tot.Target Inv.', 'Tot.Inventory (Forecast)'] // New Default
     });
     
     const [isLeadTimeMode, setIsLeadTimeMode] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
+    const [hoveredDate, setHoveredDate] = useState(null);
     const [riskFilters, setRiskFilters] = useState({
         critical: true,
         watchOut: true,
@@ -1125,15 +875,14 @@ export default function SupplyChainDashboard() {
 
     const ganttData = useMemo(() => {
         const grouped = {};
-        constQX = new Set(); // Cleaned up artifact
         const today = new Date();
 
         filteredData.forEach(item => {
             const key = `${item['Item Code']}|${item['Inv Org']}`;
             if (!grouped[key]) grouped[key] = { itemCode: item['Item Code'], invOrg: item['Inv Org'], days: {} };
             if (!grouped[key].days[item.Date]) grouped[key].days[item.Date] = { _dateObj: item._dateObj, metrics: {} };
-            constTX = item.Metric.trim();
-            grouped[key].days[item.Date].metrics[TX] = (grouped[key].days[item.Date].metrics[TX] || 0) + (item.Value || 0);
+            const normMetric = item.Metric.trim();
+            grouped[key].days[item.Date].metrics[normMetric] = (grouped[key].days[item.Date].metrics[normMetric] || 0) + (item.Value || 0);
         });
 
         let rows = [];
@@ -1156,7 +905,6 @@ export default function SupplyChainDashboard() {
                 const inventory = m['Tot.Inventory (Forecast)'] || 0;
                 const targetInv = m['Tot.Target Inv.'] || 0;
 
-                letHX = null;
                 let status = null;
                 if ((totReq + indepReq) > inventory) status = 'Critical';
                 else if (inventory < targetInv && (totReq + indepReq) <= 0.001) status = 'Watch Out';
@@ -1262,7 +1010,7 @@ export default function SupplyChainDashboard() {
         setSelectedItem(null);
         setIsDetailOpen(false);
         setGanttSort('itemCode');
-        // Reset date range (this logic existed before, keeping it consistent)
+        setHoveredDate(null);
         const validTimes = [];
         for (let i = 0; i < rawData.length; i++) {
             const t = rawData[i]._dateObj ? rawData[i]._dateObj.getTime() : NaN;
@@ -1320,6 +1068,7 @@ export default function SupplyChainDashboard() {
                         </div>
                     </div>
                     <div className="flex items-center space-x-3">
+                        {/* Dark Mode Toggle */}
                         <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-xl border transition-all ${isDarkMode ? 'bg-slate-800 border-slate-700 text-yellow-400 hover:text-yellow-300' : 'bg-white border-slate-200 text-slate-400 hover:text-indigo-600'}`}>
                             {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                         </button>
@@ -1339,115 +1088,92 @@ export default function SupplyChainDashboard() {
             </header>
 
             <div className="flex min-h-[calc(100vh-64px)] max-w-[1800px] mx-auto">
-                {/* --- NAVIGATION SIDEBAR (Left) --- */}
-                <div className={`hidden xl:flex flex-col w-[5%] 2xl:w-[4%] border-r py-6 items-center gap-4 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50/50'}`}>
-                    <button 
-                        onClick={() => setActiveView('dashboard')}
-                        className={`p-3 rounded-xl transition-all group relative ${activeView === 'dashboard' 
-                            ? (isDarkMode ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-50 text-indigo-600') 
-                            : (isDarkMode ? 'text-slate-500 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-400 hover:bg-white hover:shadow-sm hover:text-slate-600')}`}
-                        title="Dashboard View"
-                    >
-                        <LayoutDashboard className="w-5 h-5" />
-                        {activeView === 'dashboard' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-indigo-500 rounded-r-full" />}
-                    </button>
-                    
-                    <button 
-                        onClick={() => setActiveView('network')}
-                        className={`p-3 rounded-xl transition-all group relative ${activeView === 'network' 
-                            ? (isDarkMode ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-50 text-indigo-600') 
-                            : (isDarkMode ? 'text-slate-500 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-400 hover:bg-white hover:shadow-sm hover:text-slate-600')}`}
-                        title="Network Graph Analysis"
-                    >
-                        <Share2 className="w-5 h-5" />
-                        {activeView === 'network' && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-indigo-500 rounded-r-full" />}
-                    </button>
+                {/* --- LEFT SIDEBAR PLACEHOLDER (10%) --- */}
+                <div className={`hidden xl:block w-[5%] 2xl:w-[10%] border-r ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50/50'}`}>
+                    <div className="h-full w-full flex items-center justify-center opacity-10">
+                        <PanelLeft className="w-6 h-6" />
+                    </div>
                 </div>
 
-                {/* --- CENTER MAIN CONTENT (75%) --- */}
+                {/* --- CENTER MAIN CONTENT (70%) --- */}
                 <main className="flex-1 flex flex-col p-6 gap-6 min-w-0 overflow-hidden">
-                    {activeView === 'dashboard' ? (
-                        // DASHBOARD VIEW
-                        <>
-                            <div className={`flex-1 min-h-[550px] rounded-2xl shadow-sm border p-0 overflow-hidden flex flex-col transition-all duration-300 ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/20' : 'bg-white border-slate-200/60 shadow-slate-200/50'}`}>
-                                <div className={`p-4 border-b flex items-center justify-between ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-slate-50/50'}`}>
-                                    <div className="flex items-center space-x-3">
-                                        <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500"><Network className="w-5 h-5" /></div>
-                                        <div><h2 className={`text-base font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Supply Chain Network</h2><p className="text-xs text-slate-500">Live Inventory Map</p></div>
-                                    </div>
-                                </div>
-                                <div className="flex-1 relative">
-                                     <SupplyChainMap 
-                                        selectedItemFromParent={selectedItem} 
-                                        bomData={bomData} 
-                                        inventoryData={rawData} 
-                                        dateRange={dateRange} 
-                                        onOpenDetails={onOpenDetailsCallback}
-                                        onNodeSelect={onNodeSelectCallback}
-                                        isDarkMode={isDarkMode}
-                                    />
-                                </div>
+                    {/* SUPPLY CHAIN MAP (Main Stage) */}
+                    <div className={`flex-1 min-h-[550px] rounded-2xl shadow-sm border p-0 overflow-hidden flex flex-col transition-all duration-300 ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/20' : 'bg-white border-slate-200/60 shadow-slate-200/50'}`}>
+                        <div className={`p-4 border-b flex items-center justify-between ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-slate-50/50'}`}>
+                            <div className="flex items-center space-x-3">
+                                <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500"><Network className="w-5 h-5" /></div>
+                                <div><h2 className={`text-base font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Supply Chain Network</h2><p className="text-xs text-slate-500">Live Inventory Map</p></div>
                             </div>
+                        </div>
+                        <div className="flex-1 relative">
+                             <SupplyChainMap 
+                                selectedItemFromParent={selectedItem} 
+                                bomData={bomData} 
+                                inventoryData={rawData} 
+                                dateRange={dateRange} 
+                                onOpenDetails={onOpenDetailsCallback}
+                                onNodeSelect={onNodeSelectCallback}
+                                isDarkMode={isDarkMode}
+                            />
+                        </div>
+                    </div>
 
-                            {/* RISK MONITOR (Bottom) */}
-                            <div className={`h-[400px] rounded-2xl shadow-sm border flex flex-col overflow-hidden transition-all duration-300 ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/20' : 'bg-white border-slate-200/60 shadow-slate-200/50'}`}>
-                                <div className={`p-4 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-slate-50/50'}`}>
-                                    <div className="flex items-center space-x-3">
-                                        <div className="p-2 bg-amber-500/10 rounded-lg"><AlertTriangle className="w-5 h-5 text-amber-500" /></div>
-                                        <div><h2 className={`text-base font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Risk Monitor</h2><p className="text-xs text-slate-500">Shortage Timeline</p></div>
-                                    </div>
-                                    <div className={`flex items-center gap-4 p-1.5 rounded-xl border shadow-sm ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                                         <div className={`flex items-center space-x-2 border-r pr-4 pl-2 ${isDarkMode ? 'border-slate-700' : 'border-slate-100'}`}>
-                                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
-                                            <select className={`text-xs border-none focus:ring-0 font-medium bg-transparent cursor-pointer ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`} value={ganttSort} onChange={(e) => setGanttSort(e.target.value)}>
-                                                <option value="itemCode">Name</option>
-                                                <option value="leadTime">Lead Time</option>
-                                                <option value="duration">Duration</option>
-                                            </select>
-                                        </div>
-                                        <div className={`flex items-center space-x-3 text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                                            <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={riskFilters.critical} onChange={e => setRiskFilters(p => ({...p, critical: e.target.checked}))} className="rounded text-red-500 focus:ring-red-500 border-slate-300" />Critical</label>
-                                            <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={riskFilters.watchOut} onChange={e => setRiskFilters(p => ({...p, watchOut: e.target.checked}))} className="rounded text-amber-400 focus:ring-amber-400 border-slate-300" />Watch Out</label>
-                                        </div>
-                                    </div>
+                    {/* RISK MONITOR (Bottom) */}
+                    <div className={`h-[400px] rounded-2xl shadow-sm border flex flex-col overflow-hidden transition-all duration-300 ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/20' : 'bg-white border-slate-200/60 shadow-slate-200/50'}`}>
+                        <div className={`p-4 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-slate-50/50'}`}>
+                            <div className="flex items-center space-x-3">
+                                <div className="p-2 bg-amber-500/10 rounded-lg"><AlertTriangle className="w-5 h-5 text-amber-500" /></div>
+                                <div><h2 className={`text-base font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Risk Monitor</h2><p className="text-xs text-slate-500">Shortage Timeline</p></div>
+                            </div>
+                            {/* Minified Risk Controls */}
+                            <div className={`flex items-center gap-4 p-1.5 rounded-xl border shadow-sm ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                                 <div className={`flex items-center space-x-2 border-r pr-4 pl-2 ${isDarkMode ? 'border-slate-700' : 'border-slate-100'}`}>
+                                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                                    <select className={`text-xs border-none focus:ring-0 font-medium bg-transparent cursor-pointer ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`} value={ganttSort} onChange={(e) => setGanttSort(e.target.value)}>
+                                        <option value="itemCode">Name</option>
+                                        <option value="leadTime">Lead Time</option>
+                                        <option value="duration">Duration</option>
+                                    </select>
                                 </div>
-                                <div className="flex-1 overflow-y-auto relative scrollbar-thin">
-                                    {ganttData.length > 0 ? (
-                                        ganttData.map((row, idx) => (
-                                            <div key={idx} className={`flex items-center border-b h-12 group transition-all duration-200 
-                                                ${isDarkMode ? 'border-slate-800 hover:bg-slate-800' : 'border-slate-50 hover:bg-slate-50'}
-                                                ${selectedItem && selectedItem.itemCode === row.itemCode && selectedItem.invOrg === row.invOrg ? (isDarkMode ? 'bg-indigo-900/30' : 'bg-indigo-50/60') : ''}`}>
-                                                <div className={`flex-shrink-0 px-6 py-2 border-r truncate cursor-pointer h-full flex flex-col justify-center ${isDarkMode ? 'border-slate-800' : 'border-slate-50'}`} style={{ width: Y_AXIS_WIDTH }} onClick={() => setSelectedItem({ itemCode: row.itemCode, invOrg: row.invOrg })}>
-                                                    <div className={`font-bold text-sm truncate transition-colors ${isDarkMode ? 'text-slate-300 group-hover:text-indigo-400' : 'text-slate-700 group-hover:text-indigo-600'}`}>{row.itemCode}</div>
-                                                    <div className="text-xs text-slate-500 font-mono mt-0.5">{row.invOrg}</div>
-                                                </div>
-                                                <div className="flex-1 relative h-full cursor-pointer" style={{ marginLeft: '20px', marginRight: '30px' }} onClick={() => setSelectedItem({ itemCode: row.itemCode, invOrg: row.invOrg })}>
-                                                    <div className="absolute inset-0 flex opacity-10 pointer-events-none">
-                                                        <div className={`w-1/4 border-r h-full ${isDarkMode ? 'border-slate-700' : 'border-slate-300'}`}></div><div className={`w-1/4 border-r h-full ${isDarkMode ? 'border-slate-700' : 'border-slate-300'}`}></div><div className={`w-1/4 border-r h-full ${isDarkMode ? 'border-slate-700' : 'border-slate-300'}`}></div>
-                                                    </div>
-                                                    {row.blocks.map((block, bIdx) => {
-                                                        const style = getGanttStyles(block.start, block.end);
-                                                        const isCritical = block.status === 'Critical';
-                                                        const colorClass = isCritical ? 'bg-red-500' : 'bg-amber-500';
-                                                        return (
-                                                            <div key={bIdx} className={`absolute h-4 top-4 rounded-sm shadow-sm cursor-pointer hover:scale-y-110 transition-transform ${colorClass}`} style={{...style, minWidth: '8px'}} title={`${block.status}: ${block.days} Days`}></div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        ))
-                                    ) : <EmptyState msg="No risks match current filters" isDarkMode={isDarkMode} />}
+                                <div className={`flex items-center space-x-3 text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                                    <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={riskFilters.critical} onChange={e => setRiskFilters(p => ({...p, critical: e.target.checked}))} className="rounded text-red-500 focus:ring-red-500 border-slate-300" />Critical</label>
+                                    <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={riskFilters.watchOut} onChange={e => setRiskFilters(p => ({...p, watchOut: e.target.checked}))} className="rounded text-amber-400 focus:ring-amber-400 border-slate-300" />Watch Out</label>
                                 </div>
                             </div>
-                        </>
-                    ) : (
-                        // NETWORK GRAPH VIEW
-                        <NetworkGraphView rawData={rawData} bomData={bomData} isDarkMode={isDarkMode} />
-                    )}
+                        </div>
+                        <div className="flex-1 overflow-y-auto relative scrollbar-thin">
+                            {ganttData.length > 0 ? (
+                                ganttData.map((row, idx) => (
+                                    <div key={idx} className={`flex items-center border-b h-12 group transition-all duration-200 
+                                        ${isDarkMode ? 'border-slate-800 hover:bg-slate-800' : 'border-slate-50 hover:bg-slate-50'}
+                                        ${selectedItem && selectedItem.itemCode === row.itemCode && selectedItem.invOrg === row.invOrg ? (isDarkMode ? 'bg-indigo-900/30' : 'bg-indigo-50/60') : ''}`}>
+                                        <div className={`flex-shrink-0 px-6 py-2 border-r truncate cursor-pointer h-full flex flex-col justify-center ${isDarkMode ? 'border-slate-800' : 'border-slate-50'}`} style={{ width: Y_AXIS_WIDTH }} onClick={() => setSelectedItem({ itemCode: row.itemCode, invOrg: row.invOrg })}>
+                                            <div className={`font-bold text-sm truncate transition-colors ${isDarkMode ? 'text-slate-300 group-hover:text-indigo-400' : 'text-slate-700 group-hover:text-indigo-600'}`}>{row.itemCode}</div>
+                                            <div className="text-xs text-slate-500 font-mono mt-0.5">{row.invOrg}</div>
+                                        </div>
+                                        <div className="flex-1 relative h-full cursor-pointer" style={{ marginLeft: '20px', marginRight: '30px' }} onClick={() => setSelectedItem({ itemCode: row.itemCode, invOrg: row.invOrg })}>
+                                            <div className="absolute inset-0 flex opacity-10 pointer-events-none">
+                                                <div className={`w-1/4 border-r h-full ${isDarkMode ? 'border-slate-700' : 'border-slate-300'}`}></div><div className={`w-1/4 border-r h-full ${isDarkMode ? 'border-slate-700' : 'border-slate-300'}`}></div><div className={`w-1/4 border-r h-full ${isDarkMode ? 'border-slate-700' : 'border-slate-300'}`}></div>
+                                            </div>
+                                            {row.blocks.map((block, bIdx) => {
+                                                const style = getGanttStyles(block.start, block.end);
+                                                const isCritical = block.status === 'Critical';
+                                                const colorClass = isCritical ? 'bg-red-500' : 'bg-amber-500';
+                                                return (
+                                                    <div key={bIdx} className={`absolute h-4 top-4 rounded-sm shadow-sm cursor-pointer hover:scale-y-110 transition-transform ${colorClass}`} style={{...style, minWidth: '8px'}} title={`${block.status}: ${block.days} Days`}></div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))
+                            ) : <EmptyState msg="No risks match current filters" isDarkMode={isDarkMode} />}
+                        </div>
+                    </div>
                 </main>
 
                 {/* --- RIGHT SIDEBAR (20%) --- */}
                 <aside className={`w-[300px] 2xl:w-[20%] border-l h-screen sticky top-0 overflow-y-auto z-30 shadow-xl flex flex-col transition-colors duration-300 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                    {/* 1. Trend Graph (Top Priority) */}
                     <div className={`p-5 border-b ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-slate-50/50'}`}>
                         <div className="flex items-center gap-2 mb-4">
                             <Activity className="w-4 h-4 text-emerald-500" />
@@ -1473,7 +1199,7 @@ export default function SupplyChainDashboard() {
                         </div>
                     </div>
 
-                    {/* Global Filters (Stacked) */}
+                    {/* 2. Global Filters (Stacked) */}
                     <div className="p-5 flex-1 flex flex-col gap-6">
                         <div className="flex items-center justify-between">
                             <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2"><Filter className="w-3 h-3" /> Filters</h3>
@@ -1481,6 +1207,7 @@ export default function SupplyChainDashboard() {
                         </div>
                         
                         <div className="space-y-5">
+                            {/* Stacked Vertical Inputs */}
                             <div>
                                 <label className={`block text-[9px] font-bold uppercase mb-1.5 tracking-wider ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Analysis Mode</label>
                                 <button onClick={() => setIsLeadTimeMode(!isLeadTimeMode)} className={`flex items-center justify-between w-full px-3 py-2 rounded-lg border transition-all ${isLeadTimeMode ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-500' : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-white border-slate-200 text-slate-600'}`}>
@@ -1544,6 +1271,7 @@ export default function SupplyChainDashboard() {
                                                 } else if (val > 0) {
                                                     cellClass = isDarkMode ? "text-slate-300 font-medium" : "text-slate-700 font-medium";
                                                 }
+
                                                 return <td key={dateStr} className={`px-3 py-2 text-right border-r transition-colors font-mono text-xs ${cellClass} ${isDarkMode ? 'border-slate-800' : 'border-slate-50'}`}>{val !== undefined ? val.toLocaleString(undefined, {maximumFractionDigits: 0}) : '-'}</td>;
                                             })}
                                         </tr>
