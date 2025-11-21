@@ -322,6 +322,137 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
     </div>
 ));
 
+// --- Left Sidebar: Network Analysis ---
+const NetworkAnalysisPanel = ({ connections, onSelectItem, isDarkMode }) => {
+    const [query, setQuery] = useState('');
+
+    const summary = useMemo(() => {
+        const rms = new Set();
+        const dcs = new Set();
+        connections.forEach(conn => {
+            conn.rms.forEach(r => rms.add(r.itemCode));
+            conn.dcs.forEach(dc => dcs.add(dc));
+        });
+        return { fgCount: connections.length, rmCount: rms.size, dcCount: dcs.size };
+    }, [connections]);
+
+    const filteredConnections = useMemo(() => {
+        const term = query.trim().toLowerCase();
+        if (!term) return connections;
+        return connections.filter(conn =>
+            conn.fg.toLowerCase().includes(term) ||
+            conn.rms.some(r => r.itemCode.toLowerCase().includes(term)) ||
+            conn.dcs.some(dc => dc.toLowerCase().includes(term))
+        );
+    }, [connections, query]);
+
+    const pillBase = isDarkMode
+        ? 'border border-slate-700 bg-slate-800 text-slate-200 hover:border-indigo-500 hover:text-indigo-300'
+        : 'border border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:text-indigo-700';
+
+    return (
+        <div className="flex flex-col h-full">
+            <div className={`p-4 border-b ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-slate-50/70'}`}>
+                <div className="flex items-center justify-between mb-3">
+                    <div>
+                        <p className={`text-[10px] uppercase tracking-[0.2em] font-bold ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Network Analysis</p>
+                        <h3 className={`text-base font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>RM → FG → DC Connections</h3>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px]">
+                        <span className={`px-2 py-1 rounded-full font-semibold ${isDarkMode ? 'bg-slate-800 text-indigo-300 border border-slate-700' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>{summary.fgCount} FG</span>
+                        <span className={`px-2 py-1 rounded-full font-semibold ${isDarkMode ? 'bg-slate-800 text-emerald-300 border border-slate-700' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>{summary.rmCount} RM</span>
+                        <span className={`px-2 py-1 rounded-full font-semibold ${isDarkMode ? 'bg-slate-800 text-amber-300 border border-slate-700' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>{summary.dcCount} DC</span>
+                    </div>
+                </div>
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
+                    <input
+                        type="text"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        className={`w-full pl-10 pr-3 py-2 text-xs rounded-lg border focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-200 placeholder-slate-600' : 'bg-white border-slate-200 text-slate-700 placeholder-slate-400'}`}
+                        placeholder="Search FG, RM, or DC..."
+                    />
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin">
+                {filteredConnections.length > 0 ? (
+                    filteredConnections.map(conn => (
+                        <div key={conn.fg} className={`rounded-xl border p-3 shadow-sm transition-colors ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white/70'}`}>
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                                <div>
+                                    <p className={`text-[10px] uppercase tracking-[0.15em] font-bold ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Finished Good</p>
+                                    <button
+                                        onClick={() => onSelectItem(conn.fg, conn.plants[0], 'FG')}
+                                        className={`text-sm font-bold ${isDarkMode ? 'text-indigo-300 hover:text-indigo-200' : 'text-indigo-700 hover:text-indigo-900'}`}
+                                        title="Focus this FG on the main map"
+                                        disabled={!conn.plants.length}
+                                    >
+                                        {conn.fg}
+                                    </button>
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                        {conn.plants.length > 0 ? conn.plants.map(plant => (
+                                            <button
+                                                key={plant}
+                                                onClick={() => onSelectItem(conn.fg, plant, 'FG')}
+                                                className={`text-[10px] px-2 py-1 rounded-full ${pillBase}`}
+                                            >
+                                                <span className="font-semibold">Plant</span> {plant}
+                                            </button>
+                                        )) : <span className="text-[10px] opacity-60">No plants</span>}
+                                    </div>
+                                </div>
+                                <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-900' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
+                                    <Network className="w-4 h-4" />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <div>
+                                    <div className={`text-[10px] uppercase tracking-[0.15em] font-bold mb-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Raw Materials</div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {conn.rms.length > 0 ? conn.rms.map(rm => (
+                                            <button
+                                                key={`${conn.fg}-${rm.itemCode}`}
+                                                onClick={() => onSelectItem(rm.itemCode, rm.invOrgs[0], 'RM')}
+                                                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] ${pillBase}`}
+                                                title={rm.invOrgs.length ? `Inventory at ${rm.invOrgs.join(', ')}` : 'No inventory org found'}
+                                            >
+                                                <span className="font-semibold">{rm.itemCode}</span>
+                                                {rm.ratio ? <span className={`text-[10px] px-1.5 py-0.5 rounded ${isDarkMode ? 'bg-slate-900 text-amber-300 border border-slate-700' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>x{rm.ratio}</span> : null}
+                                                {rm.invOrgs.length > 0 && <span className={`text-[10px] px-1.5 py-0.5 rounded ${isDarkMode ? 'bg-slate-900 text-slate-300 border border-slate-700' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>{rm.invOrgs[0]}</span>}
+                                            </button>
+                                        )) : <span className="text-xs opacity-60">No RM mapped</span>}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className={`text-[10px] uppercase tracking-[0.15em] font-bold mb-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Distribution Centers</div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {conn.dcs.length > 0 ? conn.dcs.map(dc => (
+                                            <button
+                                                key={`${conn.fg}-${dc}`}
+                                                onClick={() => onSelectItem(conn.fg, dc, 'DC')}
+                                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] ${pillBase}`}
+                                            >
+                                                <Warehouse className="w-3.5 h-3.5 opacity-70" />
+                                                <span className="font-semibold">{dc}</span>
+                                            </button>
+                                        )) : <span className="text-xs opacity-60">No DC coverage</span>}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))
+                ) : (
+                    <EmptyState msg="No network connections found" isDarkMode={isDarkMode} />
+                )}
+            </div>
+        </div>
+    );
+};
+
 
 // --- Supply Chain Network Map Component ---
 const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRange, onOpenDetails, onNodeSelect, isDarkMode }) => {
@@ -684,6 +815,7 @@ export default function SupplyChainDashboard() {
     const [ganttSort, setGanttSort] = useState('itemCode');
     const [isLoading, setIsLoading] = useState(false);
     const [isDarkMode, setIsDarkMode] = useState(false);
+    const [leftSidebarTab, setLeftSidebarTab] = useState('network');
 
     const handleDataLoad = (data) => {
         setRawData(data);
@@ -829,6 +961,49 @@ export default function SupplyChainDashboard() {
             );
         });
     }, [rawData, filters, dateRange]);
+
+    const networkConnections = useMemo(() => {
+        const fgPlantIndex = new Map();
+        const fgDcIndex = new Map();
+        const rmInventoryIndex = new Map();
+
+        rawData.forEach(row => {
+            if (row.Type === 'RM') {
+                if (!rmInventoryIndex.has(row['Item Code'])) rmInventoryIndex.set(row['Item Code'], new Set());
+                rmInventoryIndex.get(row['Item Code']).add(row['Inv Org']);
+            }
+            if (row.Type === 'FG') {
+                if (PLANT_ORGS.includes(row['Inv Org'])) {
+                    if (!fgPlantIndex.has(row['Item Code'])) fgPlantIndex.set(row['Item Code'], new Set());
+                    fgPlantIndex.get(row['Item Code']).add(row['Inv Org']);
+                } else if (DC_ORGS.includes(row['Inv Org'])) {
+                    if (!fgDcIndex.has(row['Item Code'])) fgDcIndex.set(row['Item Code'], new Set());
+                    fgDcIndex.get(row['Item Code']).add(row['Inv Org']);
+                }
+            }
+        });
+
+        const bomByParent = bomData.reduce((acc, row) => {
+            if (!acc[row.parent]) acc[row.parent] = [];
+            acc[row.parent].push(row);
+            return acc;
+        }, {});
+
+        const fgCodes = new Set([...fgPlantIndex.keys(), ...fgDcIndex.keys(), ...Object.keys(bomByParent)]);
+
+        const connections = Array.from(fgCodes).map(fgCode => {
+            const plants = Array.from(fgPlantIndex.get(fgCode) || []).sort();
+            const dcs = Array.from(fgDcIndex.get(fgCode) || []).sort();
+            const rms = (bomByParent[fgCode] || []).map(rmRow => ({
+                itemCode: rmRow.child,
+                invOrgs: Array.from(rmInventoryIndex.get(rmRow.child) || []).sort(),
+                ratio: Number.isFinite(rmRow.ratio) ? rmRow.ratio : null
+            }));
+            return { fg: fgCode, plants, rms, dcs };
+        });
+
+        return connections.sort((a, b) => a.fg.localeCompare(b.fg));
+    }, [rawData, bomData]);
 
     const chartData = useMemo(() => {
         let sourceData = filteredData;
@@ -1012,6 +1187,12 @@ export default function SupplyChainDashboard() {
         return { left: `${left}%`, width: `${width}%` };
     };
 
+    const handleSidebarSelect = useCallback((itemCode, invOrg, type) => {
+        if (!itemCode || !invOrg) return;
+        setSelectedItem({ itemCode, invOrg, type });
+        setIsDetailOpen(false);
+    }, [setIsDetailOpen, setSelectedItem]);
+
     const onNodeSelectCallback = useCallback((node) => {
         if (node) setSelectedItem({ itemCode: node.id, invOrg: node.invOrg, type: node.type });
         else setSelectedItem(null);
@@ -1059,10 +1240,47 @@ export default function SupplyChainDashboard() {
             </header>
 
             <div className="flex min-h-[calc(100vh-64px)] max-w-[1800px] mx-auto">
-                {/* --- LEFT SIDEBAR PLACEHOLDER (10%) --- */}
-                <div className={`hidden xl:block w-[5%] 2xl:w-[10%] border-r ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50/50'}`}>
-                    <div className="h-full w-full flex items-center justify-center opacity-10">
-                        <PanelLeft className="w-6 h-6" />
+                {/* --- LEFT SIDEBAR (Network Analysis) --- */}
+                <div className={`hidden xl:flex w-[280px] 2xl:w-[320px] border-r h-screen sticky top-0 overflow-hidden shadow-xl transition-colors duration-300 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                    <div className="flex flex-col w-full h-full">
+                        <div className={`p-4 flex items-center justify-between border-b ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-slate-50/70'}`}>
+                            <div className="flex items-center gap-2">
+                                <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-slate-800 text-indigo-300 border border-slate-700' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
+                                    <PanelLeft className="w-4 h-4" />
+                                </div>
+                                <div>
+                                    <p className={`text-[10px] uppercase tracking-[0.2em] font-bold ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Left Rail</p>
+                                    <h3 className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Analysis Tabs</h3>
+                                </div>
+                            </div>
+                            <div className={`flex gap-2 px-2 py-1 rounded-xl border ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white/70'}`}>
+                                <button
+                                    className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-colors ${leftSidebarTab === 'network'
+                                        ? isDarkMode ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
+                                        : isDarkMode ? 'text-slate-400 hover:text-indigo-200' : 'text-slate-500 hover:text-indigo-700'}`}
+                                    onClick={() => setLeftSidebarTab('network')}
+                                >
+                                    Network
+                                </button>
+                                <button
+                                    className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-colors ${leftSidebarTab === 'notes'
+                                        ? isDarkMode ? 'bg-slate-800 text-slate-100 border border-slate-700' : 'bg-slate-100 text-slate-700 border border-slate-200'
+                                        : 'opacity-50 cursor-not-allowed'}`}
+                                    disabled
+                                >
+                                    Notes
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                            {leftSidebarTab === 'network' && (
+                                <NetworkAnalysisPanel
+                                    connections={networkConnections}
+                                    onSelectItem={handleSidebarSelect}
+                                    isDarkMode={isDarkMode}
+                                />
+                            )}
+                        </div>
                     </div>
                 </div>
 
