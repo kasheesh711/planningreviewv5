@@ -274,7 +274,7 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail, isDarkMod
             
             <div className="flex items-baseline justify-between mt-1">
                 <div className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                    Inv: <span className={node.currentInv < 0 ? "text-rose-500 font-bold" : ""}>{node.currentInv?.toLocaleString() || 0}</span>
+                    Start Inv: <span className={node.currentInv < 0 ? "text-rose-500 font-bold" : ""}>{node.currentInv?.toLocaleString() || 0}</span>
                 </div>
                 {node.status === 'Critical' && <div className="animate-pulse"><AlertTriangle className="w-3.5 h-3.5 text-rose-500" /></div>}
             </div>
@@ -286,7 +286,7 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail, isDarkMod
 
 // --- Render Column Helper ---
 const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSearchTerm, setSort, sortValue, isActiveCol, isDarkMode, children }) => (
-    <div className={`flex flex-col h-full border-r ${isDarkMode ? 'border-slate-800 bg-slate-900/20' : 'border-slate-200/60 bg-slate-50/30'} ${isActiveCol ? (isDarkMode ? 'bg-indigo-900/10' : 'bg-indigo-50/30') : ''} min-w-[300px] flex-1`}>
+    <div className={`flex flex-col h-full min-h-0 border-r ${isDarkMode ? 'border-slate-800 bg-slate-900/20' : 'border-slate-200/60 bg-slate-50/30'} ${isActiveCol ? (isDarkMode ? 'bg-indigo-900/10' : 'bg-indigo-50/30') : ''} min-w-[300px] flex-1`}>
         <div className={`p-4 border-b backdrop-blur-sm sticky top-0 z-10 ${isDarkMode ? 'border-slate-800 bg-slate-900/80' : 'border-slate-200/60 bg-white/80'}`}>
             <div className="flex items-center justify-between mb-3">
                 <h3 className={`text-xs font-bold uppercase tracking-widest flex items-center gap-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -312,10 +312,10 @@ const RenderColumn = React.memo(({ title, count, items, type, searchTerm, setSea
             </div>
             {children}
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin">
+        <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin min-h-0">
             {items.length > 0 ? items.map(node => (
                 <React.Fragment key={`${node.id}-${node.invOrg}`}>
-                   {node.component} 
+                   {node.component}
                 </React.Fragment>
             )) : <div className="text-xs text-center opacity-40 py-12 italic">No items found</div>}
         </div>
@@ -450,7 +450,12 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         });
 
         const invRows = validRecords.filter(r => r.Metric === 'Tot.Inventory (Forecast)');
-        invRows.sort((a,b) => b._dateObj - a._dateObj);
+        invRows.sort((a, b) => {
+            if (a._dateObj && b._dateObj) return a._dateObj - b._dateObj;
+            return (a.Start ?? 0) - (b.Start ?? 0);
+        });
+
+        // Show the starting forecast inventory value
         const currentInv = invRows.length > 0 ? invRows[0].Value : 0;
         const status = currentInv < 0 ? 'Critical' : (currentInv < 1000 ? 'Low' : 'Good');
 
@@ -565,7 +570,7 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
     }, [dataIndex, bomIndex, mapFocus, searchTermRM, searchTermFG, searchTermDC, sortRM, sortFG, sortDC, dateRange, getNodeStats, onOpenDetails, rmClassFilter, fgPlantFilter, dcFilter, onNodeSelect, isDarkMode]);
 
     return (
-        <div className={`flex h-full overflow-hidden rounded-2xl border shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/50' : 'bg-white border-slate-200 shadow-slate-200/50'} relative transition-colors duration-300`}>
+        <div className={`flex h-full min-h-0 overflow-hidden rounded-2xl border shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black/50' : 'bg-white border-slate-200 shadow-slate-200/50'} relative transition-colors duration-300`}>
             
             {/* Reset Map Button */}
             <div className="absolute top-3 right-3 z-30">
