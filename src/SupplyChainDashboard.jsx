@@ -3,7 +3,7 @@ import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine, ComposedChart
 } from 'recharts';
 import {
-    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, ArrowLeftRight, MapPin, RefreshCw, RotateCcw, PanelLeft, Sun, Moon, MoreHorizontal
+    Upload, Filter, Package, Calendar, ChevronDown, Search, Clock, ToggleLeft, ToggleRight, AlertTriangle, X, Table, SlidersHorizontal, ArrowUpDown, CheckSquare, Square, Activity, Layers, Factory, Network, FileSpreadsheet, ArrowRight, Warehouse, Box, ArrowLeftRight, MapPin, RefreshCw, RotateCcw, Sun, Moon
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -244,7 +244,7 @@ const NodeCard = React.memo(({ node, onSelect, isActive, onOpenDetail, isDarkMod
         : "ring-2 ring-indigo-500 border-transparent shadow-lg";
 
     return (
-        <div 
+        <div
             className={`relative flex flex-col p-3 rounded-xl border-[0.5px] transition-all duration-200 cursor-pointer group
                 ${isActive ? activeClasses : baseClasses}`}
             onClick={onSelect}
@@ -684,6 +684,7 @@ export default function SupplyChainDashboard() {
     const [ganttSort, setGanttSort] = useState('itemCode');
     const [isLoading, setIsLoading] = useState(false);
     const [isDarkMode, setIsDarkMode] = useState(false);
+    const [leftSidebarTab, setLeftSidebarTab] = useState('network');
 
     const handleDataLoad = (data) => {
         setRawData(data);
@@ -782,6 +783,46 @@ export default function SupplyChainDashboard() {
         };
         reader.readAsText(file);
     };
+
+    const bomLookup = useMemo(() => {
+        const map = {};
+        bomData.forEach(row => {
+            if (!row.parent || !row.child) return;
+            if (!map[row.parent]) map[row.parent] = new Set();
+            map[row.parent].add(row.child);
+        });
+        return map;
+    }, [bomData]);
+
+    const dcLookup = useMemo(() => {
+        const map = {};
+        rawData.forEach(row => {
+            if (row.Type === 'FG' && DC_ORGS.includes(row['Inv Org'])) {
+                const item = row['Item Code'];
+                if (!map[item]) map[item] = new Set();
+                map[item].add(row['Inv Org']);
+            }
+        });
+        return map;
+    }, [rawData]);
+
+    const networkConnections = useMemo(() => {
+        const fgPlants = new Map();
+        rawData.forEach(row => {
+            if (row.Type === 'FG' && PLANT_ORGS.includes(row['Inv Org'])) {
+                const key = `${row['Item Code']}|${row['Inv Org']}`;
+                if (!fgPlants.has(key)) fgPlants.set(key, { itemCode: row['Item Code'], plant: row['Inv Org'] });
+            }
+        });
+
+        return Array.from(fgPlants.values())
+            .map(fg => ({
+                ...fg,
+                rawMaterials: Array.from(bomLookup[fg.itemCode] || []),
+                distribution: Array.from(dcLookup[fg.itemCode] || [])
+            }))
+            .sort((a, b) => a.itemCode.localeCompare(b.itemCode) || a.plant.localeCompare(b.plant));
+    }, [rawData, bomLookup, dcLookup]);
 
     const options = useMemo(() => {
         const getFilteredDataForField = (excludeKey) => {
@@ -1060,10 +1101,13 @@ export default function SupplyChainDashboard() {
 
             <div className="flex min-h-[calc(100vh-64px)] max-w-[1800px] mx-auto">
                 {/* --- LEFT SIDEBAR PLACEHOLDER (10%) --- */}
-                <div className={`hidden xl:block w-[5%] 2xl:w-[10%] border-r ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50/50'}`}>
-                    <div className="h-full w-full flex items-center justify-center opacity-10">
-                        <PanelLeft className="w-6 h-6" />
-                    </div>
+                <div className={`hidden xl:flex w-[260px] 2xl:w-[320px] border-r h-screen sticky top-0 overflow-hidden ${isDarkMode ? 'border-slate-800 bg-slate-950/80' : 'border-slate-200 bg-slate-50/80'}`}>
+                    <NetworkAnalysisPanel
+                        connections={networkConnections}
+                        isDarkMode={isDarkMode}
+                        activeTab={leftSidebarTab}
+                        onTabChange={setLeftSidebarTab}
+                    />
                 </div>
 
                 {/* --- CENTER MAIN CONTENT (70%) --- */}
@@ -1258,3 +1302,101 @@ const EmptyState = ({ msg, isDarkMode }) => (
         <p>{msg}</p>
     </div>
 );
+
+const NetworkAnalysisPanel = ({ connections, isDarkMode, activeTab, onTabChange }) => {
+    const tabs = [
+        { id: 'network', label: 'Network Analysis' },
+    ];
+
+    return (
+        <div className="h-full flex flex-col">
+            <div className={`p-4 border-b ${isDarkMode ? 'border-slate-800 bg-slate-900/80' : 'border-slate-200 bg-slate-50/80'}`}>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Network className="w-4 h-4 text-indigo-500" />
+                        <div>
+                            <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>Left Side Bar</p>
+                            <h3 className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Insights</h3>
+                        </div>
+                    </div>
+                    <div className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wide ${isDarkMode ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/30' : 'bg-indigo-50 text-indigo-600 border border-indigo-100'}`}>
+                        {connections.length} FG
+                    </div>
+                </div>
+                <p className={`text-[11px] mt-2 ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>Mapped relationships between raw materials, finished goods, and distribution centers.</p>
+
+                <div className="flex gap-2 mt-3">
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => onTabChange(tab.id)}
+                            className={`text-[11px] px-3 py-1.5 rounded-lg border font-semibold transition-all ${activeTab === tab.id
+                                ? (isDarkMode ? 'bg-indigo-500/20 border-indigo-400 text-indigo-200' : 'bg-indigo-50 border-indigo-200 text-indigo-700')
+                                : (isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300')}`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin">
+                {activeTab === 'network' && connections.length > 0 ? connections.map(conn => (
+                    <div
+                        key={`${conn.itemCode}-${conn.plant}`}
+                        className={`rounded-xl border shadow-sm p-3 transition-all hover:-translate-y-0.5 hover:shadow-md ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200/80'}`}
+                    >
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-indigo-500/20 text-indigo-200 border border-indigo-500/30' : 'bg-indigo-50 text-indigo-600 border border-indigo-100'}`}>FG</span>
+                                    <p className={`text-sm font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`} title={conn.itemCode}>{conn.itemCode}</p>
+                                </div>
+                                <div className={`flex items-center gap-1 mt-1 text-[11px] ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>
+                                    <Factory className="w-3 h-3" />
+                                    <span className="font-mono">{conn.plant}</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 text-[10px] uppercase font-bold">
+                                <span className={`px-2 py-1 rounded-full border ${isDarkMode ? 'border-slate-700 text-slate-200' : 'border-slate-200 text-slate-700'}`}>{conn.rawMaterials.length} RM</span>
+                                <span className={`px-2 py-1 rounded-full border ${isDarkMode ? 'border-slate-700 text-slate-200' : 'border-slate-200 text-slate-700'}`}>{conn.distribution.length} DC</span>
+                            </div>
+                        </div>
+
+                        <div className="mt-3 space-y-2">
+                            <div className={`flex items-center gap-2 text-[11px] font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                                <Box className="w-3.5 h-3.5" />
+                                Raw Materials
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {conn.rawMaterials.length > 0 ? conn.rawMaterials.map(rm => (
+                                    <span key={rm} className={`px-2 py-1 rounded-full text-[10px] border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>{rm}</span>
+                                )) : (
+                                    <span className={`text-[11px] italic ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>No RM mapping</span>
+                                )}
+                            </div>
+
+                            <div className={`flex items-center gap-2 text-[11px] font-semibold mt-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                                <Warehouse className="w-3.5 h-3.5" />
+                                Distribution Centers
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {conn.distribution.length > 0 ? conn.distribution.map(dc => (
+                                    <span key={dc} className={`px-2 py-1 rounded-full text-[10px] border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>{dc}</span>
+                                )) : (
+                                    <span className={`text-[11px] italic ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>No DC coverage</span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )) : activeTab === 'network' ? (
+                    <div className={`h-full flex flex-col items-center justify-center rounded-xl border border-dashed ${isDarkMode ? 'bg-slate-900/60 border-slate-800 text-slate-600' : 'bg-slate-50/80 border-slate-200 text-slate-500'}`}>
+                        <Network className="w-6 h-6 mb-2" />
+                        <p className="text-sm font-medium">No finished goods found</p>
+                        <p className="text-[11px]">Import data to visualize connections.</p>
+                    </div>
+                ) : null}
+            </div>
+        </div>
+    );
+};
