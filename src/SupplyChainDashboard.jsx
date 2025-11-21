@@ -974,7 +974,7 @@ export default function SupplyChainDashboard() {
              const metric = d.Metric.trim();
              uniqueMetrics.add(metric);
              if (!valueMap[metric]) valueMap[metric] = {};
-             valueMap[metric][d.Date] = (valueMap[metric][d.Date] || 0) + d.Value;
+             valueMap[metric][d.Date] = d.Value;
         });
 
         const sortedDates = Array.from(uniqueDates).sort((a,b) => new Date(a) - new Date(b));
