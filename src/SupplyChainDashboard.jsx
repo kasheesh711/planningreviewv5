@@ -391,19 +391,22 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
 
     // 2. Index BOM
     const bomIndex = useMemo(() => {
-        const p2c = {}; // Parent -> Children
-        const c2p = {}; // Child -> Parents
+        const p2c = {}; // Parent+Plant -> Children+Plant
+        const c2p = {}; // Child+Plant -> Parents+Plant
         const parents = new Set();
         const children = new Set();
-        
-        bomData.forEach(b => {
-            if (!p2c[b.parent]) p2c[b.parent] = new Set();
-            p2c[b.parent].add(b.child);
-            parents.add(b.parent);
 
-            if (!c2p[b.child]) c2p[b.child] = new Set();
-            c2p[b.child].add(b.parent);
-            children.add(b.child);
+        bomData.forEach(b => {
+            const parentKey = `${b.parent}|${b.plant}`;
+            const childKey = `${b.child}|${b.plant}`;
+
+            if (!p2c[parentKey]) p2c[parentKey] = new Set();
+            p2c[parentKey].add(childKey);
+            parents.add(parentKey);
+
+            if (!c2p[childKey]) c2p[childKey] = new Set();
+            c2p[childKey].add(parentKey);
+            children.add(childKey);
         });
         return { p2c, c2p, parents, children };
     }, [bomData]);
@@ -469,32 +472,39 @@ const SupplyChainMap = ({ selectedItemFromParent, bomData, inventoryData, dateRa
         let targetFGKeys = dataIndex.fgKeys;
         let targetDCKeys = dataIndex.dcKeys;
 
-        targetRMKeys = targetRMKeys.filter(k => bomIndex.children.has(k.split('|')[0]));
-        targetFGKeys = targetFGKeys.filter(k => bomIndex.parents.has(k.split('|')[0]));
+        targetRMKeys = targetRMKeys.filter(k => bomIndex.children.has(k));
+        targetFGKeys = targetFGKeys.filter(k => bomIndex.parents.has(k));
 
         if (mapFocus) {
-            const focusId = mapFocus.id; 
-            
+            const focusId = mapFocus.id;
+
             if (mapFocus.type === 'FG') {
-                const ingredients = bomIndex.p2c[focusId];
-                if (ingredients) targetRMKeys = targetRMKeys.filter(k => ingredients.has(k.split('|')[0]));
-                else targetRMKeys = []; 
-                
+                const parentKey = `${focusId}|${mapFocus.invOrg}`;
+                const ingredients = bomIndex.p2c[parentKey];
+                if (ingredients) targetRMKeys = targetRMKeys.filter(k => ingredients.has(k));
+                else targetRMKeys = [];
+
                 targetDCKeys = targetDCKeys.filter(k => k.split('|')[0] === focusId);
 
             } else if (mapFocus.type === 'RM') {
-                const consumers = bomIndex.c2p[focusId];
-                if (consumers) targetFGKeys = targetFGKeys.filter(k => consumers.has(k.split('|')[0]));
+                const childKey = `${focusId}|${mapFocus.invOrg}`;
+                const consumers = bomIndex.c2p[childKey];
+                if (consumers) targetFGKeys = targetFGKeys.filter(k => consumers.has(k));
                 else targetFGKeys = [];
-                
+
                 const visibleFgCodes = new Set(targetFGKeys.map(k => k.split('|')[0]));
                 targetDCKeys = targetDCKeys.filter(k => visibleFgCodes.has(k.split('|')[0]));
 
             } else if (mapFocus.type === 'DC') {
                 targetFGKeys = targetFGKeys.filter(k => k.split('|')[0] === focusId);
-                
-                const ingredients = bomIndex.p2c[focusId];
-                if (ingredients) targetRMKeys = targetRMKeys.filter(k => ingredients.has(k.split('|')[0]));
+
+                const ingredientKeys = new Set();
+                targetFGKeys.forEach(parentKey => {
+                    const ingredients = bomIndex.p2c[parentKey];
+                    if (ingredients) ingredients.forEach(i => ingredientKeys.add(i));
+                });
+
+                if (ingredientKeys.size > 0) targetRMKeys = targetRMKeys.filter(k => ingredientKeys.has(k));
                 else targetRMKeys = [];
             }
         }
